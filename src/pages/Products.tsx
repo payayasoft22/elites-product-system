@@ -2,12 +2,13 @@
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Package, Plus, Loader2 } from "lucide-react";
+import { Package, Plus, Loader2, Search } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { Input } from "@/components/ui/input";
 
 interface Product {
   prodcode: string;
@@ -22,6 +23,7 @@ const Products = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const itemsPerPage = 10;
 
   const handleAddProduct = () => {
@@ -86,10 +88,23 @@ const Products = () => {
     fetchProducts();
   }, [toast]);
 
+  // Filter products based on search query
+  const filteredProducts = searchQuery.trim() === "" 
+    ? products 
+    : products.filter(product => 
+        product.prodcode.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        (product.description?.toLowerCase() || "").includes(searchQuery.toLowerCase())
+      );
+
+  // Reset to first page when search query changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
   // Pagination logic
-  const totalPages = Math.ceil(products.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedProducts = products.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedProducts = filteredProducts.slice(startIndex, startIndex + itemsPerPage);
 
   // Format price with two decimal places
   const formatPrice = (price: number | null): string => {
@@ -114,6 +129,18 @@ const Products = () => {
         </div>
 
         <Card className="p-6">
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search products by code or description..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+
           {loading ? (
             <div className="min-h-[300px] flex flex-col items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
@@ -123,18 +150,32 @@ const Products = () => {
             <div className="min-h-[300px] flex flex-col items-center justify-center text-center">
               <p className="text-destructive">Error loading products. Please try again.</p>
             </div>
-          ) : products.length === 0 ? (
+          ) : filteredProducts.length === 0 ? (
             <div className="min-h-[300px] flex flex-col items-center justify-center text-center p-8">
-              <div className="rounded-full bg-primary/10 p-3 mb-4">
-                <Package className="h-8 w-8 text-primary" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">No products yet</h3>
-              <p className="text-muted-foreground max-w-sm mb-6">
-                Get started by adding your first product to track its price history.
-              </p>
-              <Button onClick={handleAddProduct} className="gap-1">
-                <Plus className="h-4 w-4" /> Add Your First Product
-              </Button>
+              {searchQuery ? (
+                <>
+                  <div className="rounded-full bg-gray-100 p-3 mb-4">
+                    <Search className="h-8 w-8 text-gray-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">No matching products found</h3>
+                  <p className="text-muted-foreground max-w-sm">
+                    Try adjusting your search terms or clear the search to see all products.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="rounded-full bg-primary/10 p-3 mb-4">
+                    <Package className="h-8 w-8 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">No products yet</h3>
+                  <p className="text-muted-foreground max-w-sm mb-6">
+                    Get started by adding your first product to track its price history.
+                  </p>
+                  <Button onClick={handleAddProduct} className="gap-1">
+                    <Plus className="h-4 w-4" /> Add Your First Product
+                  </Button>
+                </>
+              )}
             </div>
           ) : (
             <div>
