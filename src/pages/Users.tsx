@@ -8,19 +8,44 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 
+// Mock data for users since there's no users table in the database
+const mockUsers = [
+  {
+    id: "1",
+    name: "John Doe",
+    email: "john@example.com",
+    role: "Admin",
+    status: "active",
+    created_at: "2023-01-01T00:00:00Z"
+  },
+  {
+    id: "2",
+    name: "Jane Smith",
+    email: "jane@example.com",
+    role: "User",
+    status: "active",
+    created_at: "2023-02-15T00:00:00Z"
+  },
+  {
+    id: "3",
+    name: "Bob Johnson",
+    email: "bob@example.com",
+    role: "User",
+    status: "inactive",
+    created_at: "2023-03-20T00:00:00Z"
+  }
+];
+
 const Users = () => {
   const [searchTerm, setSearchTerm] = useState("");
 
+  // Use mock data instead of querying a non-existent table
   const { data: users, isLoading, error } = useQuery({
     queryKey: ["users"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .order("created_at", { ascending: false });
-      
-      if (error) throw error;
-      return data || [];
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return mockUsers;
     }
   });
 
