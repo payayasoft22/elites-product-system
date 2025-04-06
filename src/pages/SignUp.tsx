@@ -1,10 +1,9 @@
-
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Eye, EyeOff, UserPlus, Package, History } from "lucide-react";
+import { Eye, EyeOff, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -198,29 +197,13 @@ const SignUp = () => {
             </Form>
           </CardContent>
           
-          <CardFooter className="flex flex-col gap-3 border-t pt-4">
+          <CardFooter className="flex justify-center border-t pt-4">
             <p className="text-center text-sm text-muted-foreground">
               Already have an account?{" "}
               <Link to="/login" className="text-brand-600 hover:text-brand-700 font-medium">
                 Login
               </Link>
             </p>
-            
-            <div className="flex gap-2 w-full">
-              <Button variant="outline" className="flex-1" asChild>
-                <Link to="/products" className="flex items-center gap-2">
-                  <Package className="h-4 w-4" />
-                  <span>View Products</span>
-                </Link>
-              </Button>
-              
-              <Button variant="outline" className="flex-1" asChild>
-                <Link to="/price-history" className="flex items-center gap-2">
-                  <History className="h-4 w-4" />
-                  <span>View History</span>
-                </Link>
-              </Button>
-            </div>
           </CardFooter>
         </Card>
       </div>
