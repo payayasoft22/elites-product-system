@@ -12,6 +12,7 @@ import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
 import Dashboard from "./pages/Dashboard";
 import Products from "./pages/Products";
+import PriceHistory from "./pages/PriceHistory";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -44,6 +45,14 @@ const App = () => {
                 element={
                   <ProtectedRoute>
                     <Products />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/products/:prodcode/price-history" 
+                element={
+                  <ProtectedRoute>
+                    <PriceHistory />
                   </ProtectedRoute>
                 } 
               />

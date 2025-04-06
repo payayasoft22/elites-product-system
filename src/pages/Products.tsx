@@ -1,8 +1,8 @@
-
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Package, Plus, Loader2, Search } from "lucide-react";
+import { Package, Plus, Loader2, Search, History } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +19,7 @@ interface Product {
 
 const Products = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,11 +34,14 @@ const Products = () => {
     });
   };
 
+  const handleViewPriceHistory = (prodcode: string) => {
+    navigate(`/products/${prodcode}/price-history`);
+  };
+
   useEffect(() => {
     const fetchProducts = async () => {
       setLoading(true);
       try {
-        // First, get all products
         const { data: productsData, error: productsError } = await supabase
           .from('product')
           .select('*');
@@ -45,7 +49,6 @@ const Products = () => {
         if (productsError) throw productsError;
 
         if (productsData) {
-          // For each product, get the latest price from pricehist
           const productsWithPrices = await Promise.all(
             productsData.map(async (product) => {
               const { data: priceData, error: priceError } = await supabase
@@ -88,7 +91,6 @@ const Products = () => {
     fetchProducts();
   }, [toast]);
 
-  // Filter products based on search query
   const filteredProducts = searchQuery.trim() === "" 
     ? products 
     : products.filter(product => 
@@ -96,17 +98,14 @@ const Products = () => {
         (product.description?.toLowerCase() || "").includes(searchQuery.toLowerCase())
       );
 
-  // Reset to first page when search query changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery]);
 
-  // Pagination logic
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedProducts = filteredProducts.slice(startIndex, startIndex + itemsPerPage);
 
-  // Format price with two decimal places
   const formatPrice = (price: number | null): string => {
     if (price === null) return "N/A";
     return new Intl.NumberFormat('en-US', {
@@ -187,6 +186,7 @@ const Products = () => {
                       <TableHead>Description</TableHead>
                       <TableHead>Unit</TableHead>
                       <TableHead>Current Price</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -196,6 +196,17 @@ const Products = () => {
                         <TableCell>{product.description || "—"}</TableCell>
                         <TableCell>{product.unit || "—"}</TableCell>
                         <TableCell>{formatPrice(product.currentPrice)}</TableCell>
+                        <TableCell>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="flex items-center gap-1"
+                            onClick={() => handleViewPriceHistory(product.prodcode)}
+                          >
+                            <History className="h-3.5 w-3.5" />
+                            <span>Price History</span>
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
