@@ -15,6 +15,7 @@ import Products from "./pages/Products";
 import PriceHistory from "./pages/PriceHistory";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import Users from "./pages/Users";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +54,14 @@ const App = () => {
                 element={
                   <ProtectedRoute>
                     <PriceHistory />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/users" 
+                element={
+                  <ProtectedRoute>
+                    <Users />
                   </ProtectedRoute>
                 } 
               />
