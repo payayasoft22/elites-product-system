@@ -65,7 +65,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
       {/* Sidebar for desktop */}
       <aside
         className={cn(
-          "bg-white border-r border-gray-200 h-screen transition-all duration-300 ease-in-out fixed lg:relative z-30",
+          "bg-white border-r border-gray-200 fixed top-0 bottom-0 z-30 overflow-y-auto", // Changed to fixed positioning
           isSidebarOpen ? "w-64" : "w-0 lg:w-20 overflow-hidden"
         )}
       >
@@ -130,8 +130,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
         </div>
       </aside>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main content area */}
+      <div 
+        className={cn(
+          "flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out",
+          isSidebarOpen ? "lg:pl-64" : "lg:pl-20" // Add padding to push content to the right when sidebar is open
+        )}
+      >
         {/* Mobile header */}
         <header className="bg-white border-b h-16 flex items-center px-4 lg:hidden sticky top-0 z-20">
           <Button
