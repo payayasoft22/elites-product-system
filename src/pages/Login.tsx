@@ -50,7 +50,7 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-brand-50 to-white p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-brand-800">Product Price Paladin</h1>
+          <h1 className="text-3xl font-bold text-brand-800">Elites Products</h1>
           <p className="text-muted-foreground">Manage your product pricing with precision</p>
         </div>
         
@@ -91,7 +91,7 @@ const Login = () => {
                       <FormControl>
                         <div className="relative">
                           <Input
-                            placeholder="******"
+                            placeholder="********"
                             type={showPassword ? "text" : "password"}
                             autoComplete="current-password"
                             {...field}
