@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { LogOut, Menu, Package, PieChart, Settings, Users, X } from "lucide-react";
@@ -10,9 +11,10 @@ interface NavItemProps {
   label: string;
   href: string;
   isActive: boolean;
+  isSidebarOpen: boolean;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ icon, label, href, isActive }) => (
+const NavItem: React.FC<NavItemProps> = ({ icon, label, href, isActive, isSidebarOpen }) => (
   <Link
     to={href}
     className={cn(
@@ -23,7 +25,7 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, href, isActive }) => (
     )}
   >
     {icon}
-    <span>{label}</span>
+    {isSidebarOpen && <span>{label}</span>}
   </Link>
 );
 
@@ -64,8 +66,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
       {/* Sidebar for desktop */}
       <aside
         className={cn(
-          "bg-white border-r border-gray-200 fixed top-0 bottom-0 z-30 overflow-y-auto",
-          isSidebarOpen ? "w-64" : "w-0 lg:w-20 overflow-hidden"
+          "bg-white border-r border-gray-200 fixed top-0 bottom-0 z-30 overflow-y-auto transition-all duration-300",
+          isSidebarOpen ? "w-64" : "w-16"
         )}
       >
         <div className="flex flex-col h-full">
@@ -73,13 +75,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
             {isSidebarOpen ? (
               <h1 className="font-bold text-xl text-brand-800">Elites Program</h1>
             ) : (
-              <span className="font-bold text-xl mx-auto text-brand-800">EP</span>
+              <span className="sr-only">EP</span>
             )}
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="lg:flex hidden"
+              className="flex"
             >
               {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
             </Button>
@@ -94,6 +96,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
                   label={item.label}
                   href={item.href}
                   isActive={location.pathname === item.href}
+                  isSidebarOpen={isSidebarOpen}
                 />
               ))}
             </nav>
@@ -133,7 +136,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
       <div 
         className={cn(
           "flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out",
-          isSidebarOpen ? "lg:pl-64" : "lg:pl-20"
+          isSidebarOpen ? "lg:pl-64" : "lg:pl-16"
         )}
       >
         {/* Mobile header */}
