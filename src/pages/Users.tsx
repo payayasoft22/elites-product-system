@@ -1,14 +1,12 @@
-
-import { useState } from "react";
+import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Helmet } from "react-helmet";
+import { Helmet } from "react-helmet-async";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 
-// Mock data for users since there's no users table in the database
 const mockUsers = [
   {
     id: "1",
@@ -39,11 +37,9 @@ const mockUsers = [
 const Users = () => {
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Use mock data instead of querying a non-existent table
   const { data: users, isLoading, error } = useQuery({
     queryKey: ["users"],
     queryFn: async () => {
-      // Simulate network delay
       await new Promise(resolve => setTimeout(resolve, 1000));
       return mockUsers;
     }
