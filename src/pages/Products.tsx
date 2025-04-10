@@ -183,7 +183,7 @@ const Products = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Product Code</TableHead>
-                      <TableHead>Description</TableHead>
+                      <TableHead>Product Name</TableHead>
                       <TableHead>Unit</TableHead>
                       <TableHead>Current Price</TableHead>
                       <TableHead>Actions</TableHead>
