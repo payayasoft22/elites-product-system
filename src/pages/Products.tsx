@@ -184,7 +184,7 @@ const Products = () => {
                     <TableRow>
                       <TableHead>Product Code</TableHead>
                       <TableHead>Product Name</TableHead>
-                      <TableHead>Unit</TableHead>
+                      <TableHead>Type</TableHead>
                       <TableHead>Current Price</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
