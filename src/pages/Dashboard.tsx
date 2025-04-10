@@ -1,8 +1,18 @@
 
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package, DollarSign, TrendingUp, Users } from "lucide-react";
+import { Package, DollarSign, TrendingUp, Users, ExternalLink } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { format } from "date-fns";
+
+interface PriceChange {
+  prodcode: string;
+  description: string | null;
+  unitprice: number | null;
+  effdate: string;
+}
 
 const StatCard = ({ title, value, icon, description }: { 
   title: string;
@@ -25,6 +35,90 @@ const StatCard = ({ title, value, icon, description }: {
 );
 
 const Dashboard = () => {
+  const [products, setProducts] = useState<number>(0);
+  const [avgPrice, setAvgPrice] = useState<number | null>(null);
+  const [priceUpdates, setPriceUpdates] = useState<number>(0);
+  const [recentPriceChanges, setRecentPriceChanges] = useState<PriceChange[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  const formatPrice = (price: number | null): string => {
+    if (price === null) return "N/A";
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(price);
+  };
+
+  const formatDate = (dateString: string) => {
+    try {
+      return format(new Date(dateString), 'MMM d, yyyy');
+    } catch (error) {
+      return dateString;
+    }
+  };
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch product count
+        const { count: productCount, error: productError } = await supabase
+          .from('product')
+          .select('*', { count: 'exact', head: true });
+        
+        if (productError) throw productError;
+        setProducts(productCount || 0);
+        
+        // Fetch recent price changes
+        const { data: priceHistData, error: priceHistError } = await supabase
+          .from('pricehist')
+          .select(`
+            prodcode,
+            unitprice,
+            effdate,
+            product (
+              description
+            )
+          `)
+          .order('effdate', { ascending: false })
+          .limit(5);
+          
+        if (priceHistError) throw priceHistError;
+        
+        const formattedPriceChanges = priceHistData.map(item => ({
+          prodcode: item.prodcode,
+          description: item.product?.description,
+          unitprice: item.unitprice,
+          effdate: item.effdate
+        }));
+        
+        setRecentPriceChanges(formattedPriceChanges);
+        setPriceUpdates(priceHistData.length);
+        
+        // Calculate average price
+        if (priceHistData.length > 0) {
+          const prices = priceHistData
+            .filter(item => item.unitprice !== null)
+            .map(item => item.unitprice as number);
+            
+          if (prices.length > 0) {
+            const total = prices.reduce((sum, price) => sum + price, 0);
+            setAvgPrice(total / prices.length);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchDashboardData();
+  }, []);
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
@@ -36,27 +130,27 @@ const Dashboard = () => {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard
             title="Total Products"
-            value="124"
+            value={String(products)}
             icon={<Package className="h-4 w-4" />}
-            description="12 added this month"
+            description="Product catalog overview"
           />
           <StatCard
             title="Average Price"
-            value="$45.80"
+            value={avgPrice ? formatPrice(avgPrice) : "N/A"}
             icon={<DollarSign className="h-4 w-4" />}
-            description="3.2% increase from last month"
+            description="Based on recent updates"
           />
           <StatCard
             title="Price Updates"
-            value="573"
+            value={String(priceUpdates)}
             icon={<TrendingUp className="h-4 w-4" />}
-            description="42 updates this week"
+            description="Total price change records"
           />
           <StatCard
             title="Active Users"
             value="9"
             icon={<Users className="h-4 w-4" />}
-            description="2 new users this month"
+            description="System users"
           />
         </div>
         
@@ -83,9 +177,40 @@ const Dashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">No price updates available yet.</p>
-              </div>
+              {loading ? (
+                <div className="text-sm text-muted-foreground">Loading price history...</div>
+              ) : recentPriceChanges.length > 0 ? (
+                <div className="space-y-4">
+                  {recentPriceChanges.map((change, index) => (
+                    <div key={`${change.prodcode}-${change.effdate}-${index}`} className="flex justify-between items-center border-b pb-2 last:border-0 last:pb-0">
+                      <div>
+                        <div className="font-medium">{change.prodcode}</div>
+                        <div className="text-sm text-muted-foreground truncate max-w-[200px]">
+                          {change.description || "No description"}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatDate(change.effdate)}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-right">
+                          {formatPrice(change.unitprice)}
+                        </span>
+                        <Link to={`/products/${change.prodcode}/price-history`} className="text-muted-foreground hover:text-primary">
+                          <ExternalLink size={14} />
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="pt-2 text-right">
+                    <Link to="/products" className="text-sm text-primary hover:underline">
+                      View all products →
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">No price updates available yet.</div>
+              )}
             </CardContent>
           </Card>
         </div>
