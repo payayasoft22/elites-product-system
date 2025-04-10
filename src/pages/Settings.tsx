@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,14 @@ import { useAuth } from "@/contexts/AuthContext";
 const Settings = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [fullName, setFullName] = useState("");
+
+  // Get the user's name from metadata when component mounts
+  useEffect(() => {
+    if (user && user.user_metadata && user.user_metadata.full_name) {
+      setFullName(user.user_metadata.full_name);
+    }
+  }, [user]);
 
   const handleSaveChanges = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +59,12 @@ const Settings = () => {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="name">Full Name</Label>
-                  <Input id="name" placeholder="Enter your full name" />
+                  <Input 
+                    id="name" 
+                    placeholder="Enter your full name" 
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                  />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="company">Company</Label>

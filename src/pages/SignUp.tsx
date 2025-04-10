@@ -48,7 +48,7 @@ const SignUp = () => {
   
   const onSubmit = async (data: SignupFormValues) => {
     try {
-      await signup(data.email, data.password);
+      await signup(data.email, data.password, data.name);
     } catch (error) {
       console.error("Signup error:", error);
     }
