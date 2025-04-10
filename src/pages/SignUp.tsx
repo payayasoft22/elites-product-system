@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -15,7 +16,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 
 const signupSchema = z.object({
@@ -57,8 +58,8 @@ const SignUp = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-brand-50 to-white p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-brand-800">Product Price Paladin</h1>
-          <p className="text-muted-foreground">Manage your product pricing with precision</p>
+          <h1 className="text-3xl font-bold text-brand-800">Elites Program</h1>
+          <p className="text-muted-foreground">Elevate your business management</p>
         </div>
         
         <Card className="border-border/50 shadow-lg">

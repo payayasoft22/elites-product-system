@@ -1,11 +1,29 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+
+import React from 'react';
+import { Link } from 'react-router-dom';
 
 const Index = () => {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-gray-600">Start building your amazing project here!</p>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-brand-50 to-white p-4">
+      <div className="text-center max-w-md">
+        <h1 className="text-4xl font-bold text-brand-800 mb-4">Elites Program</h1>
+        <p className="text-xl text-muted-foreground mb-8">
+          Elevate your business management with powerful tools and insights
+        </p>
+        <div className="flex justify-center gap-4">
+          <Link 
+            to="/login" 
+            className="bg-brand-600 text-white px-6 py-3 rounded-md hover:bg-brand-700 transition-colors"
+          >
+            Login
+          </Link>
+          <Link 
+            to="/signup" 
+            className="border border-brand-600 text-brand-600 px-6 py-3 rounded-md hover:bg-brand-50 transition-colors"
+          >
+            Sign Up
+          </Link>
+        </div>
       </div>
     </div>
   );

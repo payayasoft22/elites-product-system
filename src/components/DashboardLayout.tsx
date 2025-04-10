@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { LogOut, Menu, Package, PieChart, Settings, Users, X } from "lucide-react";
@@ -65,16 +64,16 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
       {/* Sidebar for desktop */}
       <aside
         className={cn(
-          "bg-white border-r border-gray-200 fixed top-0 bottom-0 z-30 overflow-y-auto", // Changed to fixed positioning
+          "bg-white border-r border-gray-200 fixed top-0 bottom-0 z-30 overflow-y-auto",
           isSidebarOpen ? "w-64" : "w-0 lg:w-20 overflow-hidden"
         )}
       >
         <div className="flex flex-col h-full">
           <div className="p-4 flex items-center justify-between h-16 border-b">
             {isSidebarOpen ? (
-              <h1 className="font-bold text-xl text-brand-800">Price Paladin</h1>
+              <h1 className="font-bold text-xl text-brand-800">Elites Program</h1>
             ) : (
-              <span className="font-bold text-xl mx-auto text-brand-800">PP</span>
+              <span className="font-bold text-xl mx-auto text-brand-800">EP</span>
             )}
             <Button
               variant="ghost"
@@ -134,7 +133,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
       <div 
         className={cn(
           "flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out",
-          isSidebarOpen ? "lg:pl-64" : "lg:pl-20" // Add padding to push content to the right when sidebar is open
+          isSidebarOpen ? "lg:pl-64" : "lg:pl-20"
         )}
       >
         {/* Mobile header */}
@@ -147,7 +146,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
           >
             <Menu size={20} />
           </Button>
-          <h1 className="font-bold text-xl text-brand-800">Price Paladin</h1>
+          <h1 className="font-bold text-xl text-brand-800">Elites Program</h1>
         </header>
 
         {/* Page content */}
