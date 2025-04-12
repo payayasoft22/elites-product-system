@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 interface User {
   id: string;
@@ -21,63 +22,64 @@ interface User {
 
 const Users = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const { toast } = useToast();
 
-  // Fetch users from Supabase auth service
+  // Fetch users from Supabase
   const { data: users, isLoading, error } = useQuery({
     queryKey: ["users"],
     queryFn: async () => {
       try {
-        // Try to get user data from the auth.users table (available to admins)
-        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-        
-        if (authError || !authUsers) {
-          console.error("Error fetching users from auth admin API:", authError);
+        const { data: usersData, error } = await supabase
+          .from('profiles')
+          .select('id, email, full_name, created_at, last_sign_in_at, role, status')
+          .order('created_at', { ascending: false });
+          
+        if (error) {
+          console.error("Error fetching users from profiles:", error);
           throw new Error("Unable to fetch users");
         }
         
-        // Transform the data to match our expected format
-        return authUsers.users.map((user: any) => ({
-          id: user.id,
-          name: user.user_metadata?.full_name || user.user_metadata?.name || null,
-          email: user.email || "",
-          role: user.user_metadata?.role || "User",
-          status: user.banned || !user.confirmed_at ? "inactive" : "active",
-          created_at: user.created_at,
-          last_sign_in_at: user.last_sign_in_at
-        }));
+        if (usersData && usersData.length > 0) {
+          return usersData.map(user => ({
+            id: user.id,
+            name: user.full_name || "N/A",
+            email: user.email || "",
+            role: user.role || "User",
+            status: user.status || "active",
+            created_at: user.created_at,
+            last_sign_in_at: user.last_sign_in_at
+          }));
+        }
+        
+        // If no profiles found, use session info to at least show current user
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        
+        if (currentUser) {
+          // Show toast to admin explaining the situation
+          toast({
+            title: "User Information Notice",
+            description: "No user profiles found in database. Showing only current user information.",
+            variant: "default"
+          });
+          
+          return [{
+            id: currentUser.id,
+            name: currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || "Current User",
+            email: currentUser.email || "",
+            role: currentUser.user_metadata?.role || "User",
+            status: "active",
+            created_at: currentUser.created_at,
+            last_sign_in_at: currentUser.last_sign_in_at
+          }];
+        }
+        
+        // Fallback to empty array
+        return [];
       } catch (error) {
         console.error("Error:", error);
         
-        // Fallback to mock data if we can't access the real user data
-        // This would happen if the current user doesn't have admin privileges
-        return [
-          {
-            id: "1",
-            name: "John Doe",
-            email: "john@example.com",
-            role: "Admin",
-            status: "active",
-            created_at: "2023-01-01T00:00:00Z",
-            last_sign_in_at: new Date().toISOString()
-          },
-          {
-            id: "2",
-            name: "Jane Smith",
-            email: "jane@example.com",
-            role: "User",
-            status: "active",
-            created_at: "2023-02-15T00:00:00Z",
-            last_sign_in_at: new Date().toISOString()
-          },
-          {
-            id: "3",
-            name: "Bob Johnson",
-            email: "bob@example.com",
-            role: "User",
-            status: "inactive",
-            created_at: "2023-03-20T00:00:00Z"
-          }
-        ];
+        // Return empty array instead of fallback data
+        return [];
       }
     }
   });
@@ -140,6 +142,10 @@ const Users = () => {
               <div className="text-center py-4 text-red-500">
                 Error loading users: {(error as Error).message}
               </div>
+            ) : filteredUsers?.length === 0 ? (
+              <div className="text-center py-4 text-gray-500">
+                No registered users found. When users register on your system, they will appear here.
+              </div>
             ) : (
               <Table>
                 <TableHeader>
@@ -153,34 +159,26 @@ const Users = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredUsers?.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-4 text-gray-500">
-                        No users found matching your search.
+                  {filteredUsers?.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell className="font-medium">{user.name || "N/A"}</TableCell>
+                      <TableCell>{user.email || "N/A"}</TableCell>
+                      <TableCell>{user.role || "User"}</TableCell>
+                      <TableCell>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          user.status === "inactive" ? "bg-gray-100 text-gray-800" : "bg-green-100 text-green-800"
+                        }`}>
+                          {user.status === "active" ? "Active" : "Inactive"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        {formatDate(user.created_at)}
+                      </TableCell>
+                      <TableCell>
+                        {formatDate(user.last_sign_in_at)}
                       </TableCell>
                     </TableRow>
-                  ) : (
-                    filteredUsers?.map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">{user.name || "N/A"}</TableCell>
-                        <TableCell>{user.email || "N/A"}</TableCell>
-                        <TableCell>{user.role || "User"}</TableCell>
-                        <TableCell>
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            user.status === "inactive" ? "bg-gray-100 text-gray-800" : "bg-green-100 text-green-800"
-                          }`}>
-                            {user.status === "active" ? "Active" : "Inactive"}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          {formatDate(user.created_at)}
-                        </TableCell>
-                        <TableCell>
-                          {formatDate(user.last_sign_in_at)}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
+                  ))}
                 </TableBody>
               </Table>
             )}
