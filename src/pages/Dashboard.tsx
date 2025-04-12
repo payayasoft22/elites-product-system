@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -88,25 +87,19 @@ const Dashboard = () => {
         if (productError) throw productError;
         setProducts(productCount || 0);
         
-        // Fetch active users
-        const { data: userData, error: userError } = await supabase
-          .from('auth.users')
-          .select('id, email, last_sign_in_at')
-          .order('last_sign_in_at', { ascending: false });
-        
-        // If we can't access the auth.users table directly (due to permissions),
-        // we'll use the auth API instead
-        if (userError) {
-          const { data: { users }, error: authError } = await supabase.auth.admin.listUsers();
+        // Fetch active users from auth API
+        try {
+          const { data: authData, error: authError } = await supabase.auth.admin.listUsers();
           
           if (authError) {
             console.error("Error fetching users:", authError);
-          } else {
+            setActiveUsers(0);
+          } else if (authData?.users) {
             // Filter active users (those who have signed in within the last 30 days)
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
             
-            const activeUserCount = users.filter(user => {
+            const activeUserCount = authData.users.filter(user => {
               if (!user.last_sign_in_at) return false;
               const lastSignIn = new Date(user.last_sign_in_at);
               return lastSignIn > thirtyDaysAgo;
@@ -114,18 +107,11 @@ const Dashboard = () => {
             
             setActiveUsers(activeUserCount);
           }
-        } else if (userData) {
-          // Filter active users (those who have signed in within the last 30 days)
-          const thirtyDaysAgo = new Date();
-          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-          
-          const activeUserCount = userData.filter(user => {
-            if (!user.last_sign_in_at) return false;
-            const lastSignIn = new Date(user.last_sign_in_at);
-            return lastSignIn > thirtyDaysAgo;
-          }).length;
-          
-          setActiveUsers(activeUserCount);
+        } catch (error) {
+          console.error("Error fetching auth users:", error);
+          // Fallback to at least count current user if we can't access all users
+          const { data: { user } } = await supabase.auth.getUser();
+          setActiveUsers(user ? 1 : 0);
         }
         
         // Fetch recent price changes

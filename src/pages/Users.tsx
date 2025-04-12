@@ -24,41 +24,28 @@ const Users = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
 
-  // Fetch users from Supabase
+  // Fetch users from Supabase authentication
   const { data: users, isLoading, error } = useQuery({
     queryKey: ["users"],
     queryFn: async () => {
       try {
-        const { data: usersData, error } = await supabase
-          .from('profiles')
-          .select('id, email, full_name, created_at, last_sign_in_at, role, status')
-          .order('created_at', { ascending: false });
-          
-        if (error) {
-          console.error("Error fetching users from profiles:", error);
-          throw new Error("Unable to fetch users");
-        }
-        
-        if (usersData && usersData.length > 0) {
-          return usersData.map(user => ({
-            id: user.id,
-            name: user.full_name || "N/A",
-            email: user.email || "",
-            role: user.role || "User",
-            status: user.status || "active",
-            created_at: user.created_at,
-            last_sign_in_at: user.last_sign_in_at
-          }));
-        }
-        
-        // If no profiles found, use session info to at least show current user
+        // Get current auth user first
         const { data: { user: currentUser } } = await supabase.auth.getUser();
         
-        if (currentUser) {
-          // Show toast to admin explaining the situation
+        if (!currentUser) {
+          throw new Error("Unable to fetch current user");
+        }
+        
+        // Fetch all users from the API
+        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+        
+        if (authError) {
+          console.error("Error fetching users:", authError);
+          
+          // If we can't get all users, at least return the current user
           toast({
             title: "User Information Notice",
-            description: "No user profiles found in database. Showing only current user information.",
+            description: "Could only retrieve current user information. Admin access is required to view all users.",
             variant: "default"
           });
           
@@ -73,13 +60,23 @@ const Users = () => {
           }];
         }
         
+        if (authUsers?.users && authUsers.users.length > 0) {
+          return authUsers.users.map(user => ({
+            id: user.id,
+            name: user.user_metadata?.full_name || user.user_metadata?.name || "N/A",
+            email: user.email || "",
+            role: user.user_metadata?.role || "User",
+            status: user.banned ? "inactive" : "active",
+            created_at: user.created_at,
+            last_sign_in_at: user.last_sign_in_at
+          }));
+        }
+        
         // Fallback to empty array
         return [];
       } catch (error) {
         console.error("Error:", error);
-        
-        // Return empty array instead of fallback data
-        return [];
+        throw new Error("Unable to fetch users");
       }
     }
   });
