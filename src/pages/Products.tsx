@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -9,6 +10,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 
 interface Product {
   prodcode: string;
@@ -16,6 +23,13 @@ interface Product {
   unit: string | null;
   currentPrice: number | null;
 }
+
+const formSchema = z.object({
+  prodcode: z.string().min(2, "Product code must be at least 2 characters"),
+  description: z.string().min(3, "Description must be at least 3 characters"),
+  unit: z.string().min(1, "Unit is required"),
+  unitprice: z.coerce.number().min(0.01, "Price must be greater than 0")
+});
 
 const Products = () => {
   const { toast } = useToast();
@@ -25,69 +39,122 @@ const Products = () => {
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [isAddProductOpen, setIsAddProductOpen] = useState<boolean>(false);
   const itemsPerPage = 10;
 
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      prodcode: "",
+      description: "",
+      unit: "",
+      unitprice: 0
+    }
+  });
+
   const handleAddProduct = () => {
-    toast({
-      title: "Feature in development",
-      description: "The ability to add products is coming soon!",
-    });
+    setIsAddProductOpen(true);
   };
 
   const handleViewPriceHistory = (prodcode: string) => {
     navigate(`/products/${prodcode}/price-history`);
   };
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      setLoading(true);
-      try {
-        const { data: productsData, error: productsError } = await supabase
-          .from('product')
-          .select('*');
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    try {
+      // Add product to the product table
+      const { error: productError } = await supabase
+        .from('product')
+        .insert({
+          prodcode: values.prodcode,
+          description: values.description,
+          unit: values.unit
+        });
 
-        if (productsError) throw productsError;
+      if (productError) throw productError;
 
-        if (productsData) {
-          const productsWithPrices = await Promise.all(
-            productsData.map(async (product) => {
-              const { data: priceData, error: priceError } = await supabase
-                .from('pricehist')
-                .select('unitprice, effdate')
-                .eq('prodcode', product.prodcode)
-                .order('effdate', { ascending: false })
-                .limit(1);
+      // Add initial price to pricehist table
+      const { error: priceError } = await supabase
+        .from('pricehist')
+        .insert({
+          prodcode: values.prodcode,
+          unitprice: values.unitprice,
+          effdate: new Date().toISOString().split('T')[0]
+        });
 
-              if (priceError) {
-                console.error(`Error fetching price for ${product.prodcode}:`, priceError);
-                return {
-                  ...product,
-                  currentPrice: null
-                };
-              }
+      if (priceError) throw priceError;
 
+      toast({
+        title: "Product added successfully",
+        description: `${values.prodcode} has been added to your products.`
+      });
+
+      // Close modal and reset form
+      setIsAddProductOpen(false);
+      form.reset();
+
+      // Refresh products list
+      fetchProducts();
+    } catch (err: any) {
+      console.error('Error adding product:', err);
+      toast({
+        title: "Error adding product",
+        description: err.message || "Failed to add product. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const { data: productsData, error: productsError } = await supabase
+        .from('product')
+        .select('*');
+
+      if (productsError) throw productsError;
+
+      if (productsData) {
+        const productsWithPrices = await Promise.all(
+          productsData.map(async (product) => {
+            const { data: priceData, error: priceError } = await supabase
+              .from('pricehist')
+              .select('unitprice, effdate')
+              .eq('prodcode', product.prodcode)
+              .order('effdate', { ascending: false })
+              .limit(1);
+
+            if (priceError) {
+              console.error(`Error fetching price for ${product.prodcode}:`, priceError);
               return {
                 ...product,
-                currentPrice: priceData && priceData.length > 0 ? priceData[0].unitprice : null
+                currentPrice: null
               };
-            })
-          );
+            }
 
-          setProducts(productsWithPrices);
-        }
-      } catch (err: any) {
-        console.error('Error fetching products:', err);
-        setError(err.message);
-        toast({
-          title: "Error",
-          description: "Failed to load products. Please try again.",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
+            return {
+              ...product,
+              currentPrice: priceData && priceData.length > 0 ? priceData[0].unitprice : null
+            };
+          })
+        );
+
+        setProducts(productsWithPrices);
       }
-    };
+    } catch (err: any) {
+      console.error('Error fetching products:', err);
+      setError(err.message);
+      toast({
+        title: "Error",
+        description: "Failed to load products. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchProducts();
   }, [toast]);
 
@@ -249,6 +316,87 @@ const Products = () => {
           )}
         </Card>
       </div>
+
+      {/* Add Product Dialog */}
+      <Dialog open={isAddProductOpen} onOpenChange={setIsAddProductOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add New Product</DialogTitle>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="prodcode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Product Code</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter product code" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter product description" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="unit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Unit</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., kg, piece, box" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="unitprice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Initial Price</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        min="0.01" 
+                        step="0.01" 
+                        placeholder="0.00" 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setIsAddProductOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit">Add Product</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };

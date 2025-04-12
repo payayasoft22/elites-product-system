@@ -14,6 +14,14 @@ interface PriceChange {
   effdate: string;
 }
 
+interface RecentProduct {
+  prodcode: string;
+  description: string | null;
+  unit: string | null;
+  created_at: string;
+  unitprice: number | null;
+}
+
 const StatCard = ({ title, value, icon, description }: { 
   title: string;
   value: string;
@@ -39,6 +47,7 @@ const Dashboard = () => {
   const [avgPrice, setAvgPrice] = useState<number | null>(null);
   const [priceUpdates, setPriceUpdates] = useState<number>(0);
   const [recentPriceChanges, setRecentPriceChanges] = useState<PriceChange[]>([]);
+  const [recentProducts, setRecentProducts] = useState<RecentProduct[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   const formatPrice = (price: number | null): string => {
@@ -109,6 +118,45 @@ const Dashboard = () => {
             setAvgPrice(total / prices.length);
           }
         }
+        
+        // Fetch recent products with their latest prices
+        const { data: recentProductsData, error: recentProductsError } = await supabase
+          .from('product')
+          .select('*')
+          .order('prodcode', { ascending: false })
+          .limit(5);
+          
+        if (recentProductsError) throw recentProductsError;
+        
+        if (recentProductsData) {
+          const productsWithPrices = await Promise.all(
+            recentProductsData.map(async (product) => {
+              const { data: priceData, error: priceError } = await supabase
+                .from('pricehist')
+                .select('unitprice, effdate')
+                .eq('prodcode', product.prodcode)
+                .order('effdate', { ascending: false })
+                .limit(1);
+                
+              if (priceError) {
+                console.error(`Error fetching price for ${product.prodcode}:`, priceError);
+                return {
+                  ...product,
+                  unitprice: null,
+                  created_at: new Date().toISOString()
+                };
+              }
+              
+              return {
+                ...product,
+                unitprice: priceData && priceData.length > 0 ? priceData[0].unitprice : null,
+                created_at: priceData && priceData.length > 0 ? priceData[0].effdate : new Date().toISOString()
+              };
+            })
+          );
+          
+          setRecentProducts(productsWithPrices);
+        }
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
       } finally {
@@ -163,9 +211,40 @@ const Dashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">No products available yet.</p>
-              </div>
+              {loading ? (
+                <div className="text-sm text-muted-foreground">Loading products...</div>
+              ) : recentProducts.length > 0 ? (
+                <div className="space-y-4">
+                  {recentProducts.map((product, index) => (
+                    <div key={`${product.prodcode}-${index}`} className="flex justify-between items-center border-b pb-2 last:border-0 last:pb-0">
+                      <div>
+                        <div className="font-medium">{product.prodcode}</div>
+                        <div className="text-sm text-muted-foreground truncate max-w-[200px]">
+                          {product.description || "No description"}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {product.unit || "No unit"} • Added {formatDate(product.created_at)}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-right">
+                          {formatPrice(product.unitprice)}
+                        </span>
+                        <Link to={`/products/${product.prodcode}/price-history`} className="text-muted-foreground hover:text-primary">
+                          <ExternalLink size={14} />
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="pt-2 text-right">
+                    <Link to="/products" className="text-sm text-primary hover:underline">
+                      View all products →
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">No products available yet.</div>
+              )}
             </CardContent>
           </Card>
           
