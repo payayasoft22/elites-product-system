@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -21,10 +22,10 @@ interface RecentProduct {
   unitprice: number | null;
 }
 
-interface UserData {
+interface AuthUser {
   id: string;
   email: string;
-  last_sign_in_at: string;
+  last_sign_in_at?: string | null;
 }
 
 const StatCard = ({ title, value, icon, description }: { 

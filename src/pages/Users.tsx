@@ -36,8 +36,8 @@ const Users = () => {
           throw new Error("Unable to fetch current user");
         }
         
-        // Fetch all users from the API
-        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+        // Fetch all users from the Auth API
+        const { data: authData, error: authError } = await supabase.auth.admin.listUsers();
         
         if (authError) {
           console.error("Error fetching users:", authError);
@@ -60,8 +60,8 @@ const Users = () => {
           }];
         }
         
-        if (authUsers?.users && authUsers.users.length > 0) {
-          return authUsers.users.map(user => ({
+        if (authData?.users && authData.users.length > 0) {
+          return authData.users.map(user => ({
             id: user.id,
             name: user.user_metadata?.full_name || user.user_metadata?.name || "N/A",
             email: user.email || "",
