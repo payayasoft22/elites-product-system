@@ -22,6 +22,12 @@ interface RecentProduct {
   unitprice: number | null;
 }
 
+interface UserData {
+  id: string;
+  email: string;
+  last_sign_in_at: string;
+}
+
 const StatCard = ({ title, value, icon, description }: { 
   title: string;
   value: string;
@@ -46,6 +52,7 @@ const Dashboard = () => {
   const [products, setProducts] = useState<number>(0);
   const [avgPrice, setAvgPrice] = useState<number | null>(null);
   const [priceUpdates, setPriceUpdates] = useState<number>(0);
+  const [activeUsers, setActiveUsers] = useState<number>(0);
   const [recentPriceChanges, setRecentPriceChanges] = useState<PriceChange[]>([]);
   const [recentProducts, setRecentProducts] = useState<RecentProduct[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -80,6 +87,46 @@ const Dashboard = () => {
         
         if (productError) throw productError;
         setProducts(productCount || 0);
+        
+        // Fetch active users
+        const { data: userData, error: userError } = await supabase
+          .from('auth.users')
+          .select('id, email, last_sign_in_at')
+          .order('last_sign_in_at', { ascending: false });
+        
+        // If we can't access the auth.users table directly (due to permissions),
+        // we'll use the auth API instead
+        if (userError) {
+          const { data: { users }, error: authError } = await supabase.auth.admin.listUsers();
+          
+          if (authError) {
+            console.error("Error fetching users:", authError);
+          } else {
+            // Filter active users (those who have signed in within the last 30 days)
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            
+            const activeUserCount = users.filter(user => {
+              if (!user.last_sign_in_at) return false;
+              const lastSignIn = new Date(user.last_sign_in_at);
+              return lastSignIn > thirtyDaysAgo;
+            }).length;
+            
+            setActiveUsers(activeUserCount);
+          }
+        } else if (userData) {
+          // Filter active users (those who have signed in within the last 30 days)
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          
+          const activeUserCount = userData.filter(user => {
+            if (!user.last_sign_in_at) return false;
+            const lastSignIn = new Date(user.last_sign_in_at);
+            return lastSignIn > thirtyDaysAgo;
+          }).length;
+          
+          setActiveUsers(activeUserCount);
+        }
         
         // Fetch recent price changes
         const { data: priceHistData, error: priceHistError } = await supabase
@@ -196,9 +243,9 @@ const Dashboard = () => {
           />
           <StatCard
             title="Active Users"
-            value="9"
+            value={String(activeUsers)}
             icon={<Users className="h-4 w-4" />}
-            description="System users"
+            description="Users active in last 30 days"
           />
         </div>
         
