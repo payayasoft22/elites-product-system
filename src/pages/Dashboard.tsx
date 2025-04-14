@@ -115,7 +115,7 @@ const Dashboard = () => {
           setActiveUsers(user ? 1 : 0);
         }
         
-        // Fetch recent price changes
+        // Fetch recent price changes from PRICEHIST table
         const { data: priceHistData, error: priceHistError } = await supabase
           .from('pricehist')
           .select(`
@@ -153,7 +153,7 @@ const Dashboard = () => {
           }
         }
         
-        // Fetch recent products with their latest prices
+        // Fetch recent products with their latest prices from PRICEHIST
         const { data: recentProductsData, error: recentProductsError } = await supabase
           .from('product')
           .select('*')
@@ -165,6 +165,7 @@ const Dashboard = () => {
         if (recentProductsData) {
           const productsWithPrices = await Promise.all(
             recentProductsData.map(async (product) => {
+              // Get the most recent price for each product (latest effective date)
               const { data: priceData, error: priceError } = await supabase
                 .from('pricehist')
                 .select('unitprice, effdate')
