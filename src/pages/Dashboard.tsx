@@ -55,6 +55,7 @@ const Dashboard = () => {
   const [recentPriceChanges, setRecentPriceChanges] = useState<PriceChange[]>([]);
   const [recentProducts, setRecentProducts] = useState<RecentProduct[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [lastLogin, setLastLogin] = useState<string>("");
 
   const formatPrice = (price: number | null): string => {
     if (price === null) return "N/A";
@@ -71,6 +72,18 @@ const Dashboard = () => {
       return format(new Date(dateString), 'MMM d, yyyy');
     } catch (error) {
       return dateString;
+    }
+  };
+
+  const getUserInfo = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const lastSignIn = user.last_sign_in_at ? new Date(user.last_sign_in_at) : null;
+        setLastLogin(lastSignIn ? `${lastSignIn.toLocaleDateString()} at ${lastSignIn.toLocaleTimeString()}` : 'First login');
+      }
+    } catch (error) {
+      console.error('Error fetching user info:', error);
     }
   };
 
@@ -112,8 +125,7 @@ const Dashboard = () => {
         } catch (error) {
           console.error("Error fetching auth users:", error);
           // Fallback to at least count current user if we can't access all users
-          const { data: { user } } = await supabase.auth.getUser();
-          setActiveUsers(user ? 1 : 0);
+          getUserInfo();
         }
         
         // Fetch recent price changes from PRICEHIST table
