@@ -3,14 +3,14 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Package, Plus, Loader2, Search, History } from "lucide-react";
+import { Package, Plus, Loader2, Search, Edit, Trash } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
@@ -40,9 +40,22 @@ const Products = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isAddProductOpen, setIsAddProductOpen] = useState<boolean>(false);
+  const [isEditProductOpen, setIsEditProductOpen] = useState<boolean>(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState<boolean>(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const itemsPerPage = 10;
 
   const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      prodcode: "",
+      description: "",
+      unit: "",
+      unitprice: 0
+    }
+  });
+
+  const editForm = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       prodcode: "",
@@ -56,8 +69,20 @@ const Products = () => {
     setIsAddProductOpen(true);
   };
 
-  const handleViewPriceHistory = (prodcode: string) => {
-    navigate(`/products/${prodcode}/price-history`);
+  const handleEditProduct = (product: Product) => {
+    setSelectedProduct(product);
+    editForm.reset({
+      prodcode: product.prodcode,
+      description: product.description || "",
+      unit: product.unit || "",
+      unitprice: product.currentPrice || 0
+    });
+    setIsEditProductOpen(true);
+  };
+
+  const handleDeleteProduct = (product: Product) => {
+    setSelectedProduct(product);
+    setIsDeleteConfirmOpen(true);
   };
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
@@ -100,6 +125,97 @@ const Products = () => {
       toast({
         title: "Error adding product",
         description: err.message || "Failed to add product. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const onEdit = async (values: z.infer<typeof formSchema>) => {
+    if (!selectedProduct) return;
+    
+    try {
+      // Update product in the product table
+      const { error: productError } = await supabase
+        .from('product')
+        .update({
+          description: values.description,
+          unit: values.unit
+        })
+        .eq('prodcode', selectedProduct.prodcode);
+
+      if (productError) throw productError;
+
+      // Only add a price history entry if the price has changed
+      if (values.unitprice !== selectedProduct.currentPrice) {
+        const { error: priceError } = await supabase
+          .from('pricehist')
+          .insert({
+            prodcode: selectedProduct.prodcode,
+            unitprice: values.unitprice,
+            effdate: new Date().toISOString().split('T')[0]
+          });
+
+        if (priceError) throw priceError;
+      }
+
+      toast({
+        title: "Product updated successfully",
+        description: `${selectedProduct.prodcode} has been updated.`
+      });
+
+      // Close modal and reset form
+      setIsEditProductOpen(false);
+      editForm.reset();
+      setSelectedProduct(null);
+
+      // Refresh products list
+      fetchProducts();
+    } catch (err: any) {
+      console.error('Error updating product:', err);
+      toast({
+        title: "Error updating product",
+        description: err.message || "Failed to update product. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const onDelete = async () => {
+    if (!selectedProduct) return;
+    
+    try {
+      // First delete price history entries
+      const { error: priceHistError } = await supabase
+        .from('pricehist')
+        .delete()
+        .eq('prodcode', selectedProduct.prodcode);
+
+      if (priceHistError) throw priceHistError;
+
+      // Then delete the product
+      const { error: productError } = await supabase
+        .from('product')
+        .delete()
+        .eq('prodcode', selectedProduct.prodcode);
+
+      if (productError) throw productError;
+
+      toast({
+        title: "Product deleted successfully",
+        description: `${selectedProduct.prodcode} has been removed from your products.`
+      });
+
+      // Close modal and reset state
+      setIsDeleteConfirmOpen(false);
+      setSelectedProduct(null);
+
+      // Refresh products list
+      fetchProducts();
+    } catch (err: any) {
+      console.error('Error deleting product:', err);
+      toast({
+        title: "Error deleting product",
+        description: err.message || "Failed to delete product. Please try again.",
         variant: "destructive",
       });
     }
@@ -266,15 +382,26 @@ const Products = () => {
                         <TableCell>{product.unit || "—"}</TableCell>
                         <TableCell>{formatPrice(product.currentPrice)}</TableCell>
                         <TableCell>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="flex items-center gap-1"
-                            onClick={() => handleViewPriceHistory(product.prodcode)}
-                          >
-                            <History className="h-3.5 w-3.5" />
-                            <span>Price History</span>
-                          </Button>
+                          <div className="flex space-x-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              className="flex items-center gap-1"
+                              onClick={() => handleEditProduct(product)}
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                              <span>Edit</span>
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              className="flex items-center gap-1 text-destructive hover:text-destructive"
+                              onClick={() => handleDeleteProduct(product)}
+                            >
+                              <Trash className="h-3.5 w-3.5" />
+                              <span>Delete</span>
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -395,6 +522,115 @@ const Products = () => {
               </DialogFooter>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Product Dialog */}
+      <Dialog open={isEditProductOpen} onOpenChange={setIsEditProductOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit Product</DialogTitle>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit(onEdit)} className="space-y-4">
+              <FormField
+                control={editForm.control}
+                name="prodcode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Product Code</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter product code" {...field} disabled />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter product description" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="unit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Unit</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., kg, piece, box" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="unitprice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Price</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        min="0.01" 
+                        step="0.01" 
+                        placeholder="0.00" 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setIsEditProductOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit">Save Changes</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Product</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {selectedProduct?.prodcode}? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => setIsDeleteConfirmOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="button" 
+              variant="destructive"
+              onClick={onDelete}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </DashboardLayout>

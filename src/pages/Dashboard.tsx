@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -95,18 +94,20 @@ const Dashboard = () => {
           if (authError) {
             console.error("Error fetching users:", authError);
             setActiveUsers(0);
-          } else if (authData?.users) {
-            // Filter active users (those who have signed in within the last 30 days)
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          } else if (authData && authData.users) {
+            // Filter active users (those who have signed in within the last 7 days)
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
             
-            const activeUserCount = authData.users.filter(user => {
-              if (!user.last_sign_in_at) return false;
-              const lastSignIn = new Date(user.last_sign_in_at);
-              return lastSignIn > thirtyDaysAgo;
-            }).length;
+            const recentUsers = authData.users.filter(user => {
+              if (user.last_sign_in_at) {
+                const lastSignIn = new Date(user.last_sign_in_at);
+                return lastSignIn >= sevenDaysAgo;
+              }
+              return false;
+            });
             
-            setActiveUsers(activeUserCount);
+            setActiveUsers(recentUsers.length);
           }
         } catch (error) {
           console.error("Error fetching auth users:", error);
