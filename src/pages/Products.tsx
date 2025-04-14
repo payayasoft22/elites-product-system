@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Package, Plus, Loader2, Search, Edit, Trash } from "lucide-react";
+import { Package, Plus, Loader2, Search, Edit, Trash, History } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -87,7 +86,6 @@ const Products = () => {
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      // Add product to the product table
       const { error: productError } = await supabase
         .from('product')
         .insert({
@@ -98,7 +96,6 @@ const Products = () => {
 
       if (productError) throw productError;
 
-      // Add initial price to pricehist table
       const { error: priceError } = await supabase
         .from('pricehist')
         .insert({
@@ -114,11 +111,9 @@ const Products = () => {
         description: `${values.prodcode} has been added to your products.`
       });
 
-      // Close modal and reset form
       setIsAddProductOpen(false);
       form.reset();
 
-      // Refresh products list
       fetchProducts();
     } catch (err: any) {
       console.error('Error adding product:', err);
@@ -134,7 +129,6 @@ const Products = () => {
     if (!selectedProduct) return;
     
     try {
-      // Update product in the product table
       const { error: productError } = await supabase
         .from('product')
         .update({
@@ -145,7 +139,6 @@ const Products = () => {
 
       if (productError) throw productError;
 
-      // Only add a price history entry if the price has changed
       if (values.unitprice !== selectedProduct.currentPrice) {
         const { error: priceError } = await supabase
           .from('pricehist')
@@ -163,12 +156,10 @@ const Products = () => {
         description: `${selectedProduct.prodcode} has been updated.`
       });
 
-      // Close modal and reset form
       setIsEditProductOpen(false);
       editForm.reset();
       setSelectedProduct(null);
 
-      // Refresh products list
       fetchProducts();
     } catch (err: any) {
       console.error('Error updating product:', err);
@@ -184,7 +175,6 @@ const Products = () => {
     if (!selectedProduct) return;
     
     try {
-      // First delete price history entries
       const { error: priceHistError } = await supabase
         .from('pricehist')
         .delete()
@@ -192,7 +182,6 @@ const Products = () => {
 
       if (priceHistError) throw priceHistError;
 
-      // Then delete the product
       const { error: productError } = await supabase
         .from('product')
         .delete()
@@ -205,11 +194,9 @@ const Products = () => {
         description: `${selectedProduct.prodcode} has been removed from your products.`
       });
 
-      // Close modal and reset state
       setIsDeleteConfirmOpen(false);
       setSelectedProduct(null);
 
-      // Refresh products list
       fetchProducts();
     } catch (err: any) {
       console.error('Error deleting product:', err);
@@ -387,6 +374,15 @@ const Products = () => {
                               variant="outline" 
                               size="sm"
                               className="flex items-center gap-1"
+                              onClick={() => navigate(`/products/${product.prodcode}/price-history`)}
+                            >
+                              <History className="h-3.5 w-3.5" />
+                              <span>Price History</span>
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              className="flex items-center gap-1"
                               onClick={() => handleEditProduct(product)}
                             >
                               <Edit className="h-3.5 w-3.5" />
@@ -444,7 +440,6 @@ const Products = () => {
         </Card>
       </div>
 
-      {/* Add Product Dialog */}
       <Dialog open={isAddProductOpen} onOpenChange={setIsAddProductOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -525,7 +520,6 @@ const Products = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Product Dialog */}
       <Dialog open={isEditProductOpen} onOpenChange={setIsEditProductOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -606,7 +600,6 @@ const Products = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>

@@ -92,10 +92,17 @@ const PriceHistory = () => {
   // Format date for display
   const formatDate = (dateString: string) => {
     try {
-      return format(new Date(dateString), 'MMM d, yyyy');
+      const date = new Date(dateString);
+      return format(date, 'MMM d, yyyy');
     } catch (error) {
       return dateString;
     }
+  };
+
+  // Format price for display
+  const formatPrice = (price: number | null) => {
+    if (price === null) return "N/A";
+    return `$${price.toFixed(2)}`;
   };
 
   const handleAddPrice = async () => {
@@ -159,10 +166,10 @@ const PriceHistory = () => {
 
   const handleEditPrice = async () => {
     try {
-      if (!prodcode || !newPrice || !newDate || !selectedPrice) {
+      if (!prodcode || !newPrice || !selectedPrice) {
         toast({
           title: "Validation Error",
-          description: "Please provide both price and effective date",
+          description: "Please provide a valid price",
           variant: "destructive",
         });
         return;
@@ -285,7 +292,7 @@ const PriceHistory = () => {
             <Plus className="mr-2 h-4 w-4" /> Add Price History
           </Button>
         </div>
-
+        
         {loading ? (
           <Card className="flex items-center justify-center p-10">
             <div className="flex flex-col items-center gap-2">
@@ -304,92 +311,70 @@ const PriceHistory = () => {
             </Button>
           </Card>
         ) : (
-          <>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-1.5">
-                  <span>{productDetails.prodcode}</span>
-                  {productDetails.description && (
-                    <span className="text-muted-foreground">
-                      - {productDetails.description}
-                    </span>
-                  )}
-                </CardTitle>
-                <CardDescription>
-                  {productDetails.unit && (
-                    <span>Unit: {productDetails.unit}</span>
-                  )}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {priceHistory.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-10 text-center">
-                    <Calendar className="h-10 w-10 text-muted-foreground mb-3" />
-                    <h3 className="text-lg font-semibold">No price history available</h3>
-                    <p className="text-muted-foreground mt-1">
-                      This product doesn't have any recorded price changes yet.
-                    </p>
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Effective Date</TableHead>
-                        <TableHead>Price</TableHead>
-                        <TableHead className="w-[120px]">Actions</TableHead>
+          <Card>
+            <CardHeader className="pb-0">
+              <CardTitle>
+                {productDetails.prodcode}{productDetails.description && ` - ${productDetails.description}`}
+              </CardTitle>
+              <CardDescription>
+                Unit: {productDetails.unit || "N/A"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4">
+              {priceHistory.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-center">
+                  <Calendar className="h-10 w-10 text-muted-foreground mb-3" />
+                  <h3 className="text-lg font-semibold">No price history available</h3>
+                  <p className="text-muted-foreground mt-1">
+                    This product doesn't have any recorded price changes yet.
+                  </p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Effective Date</TableHead>
+                      <TableHead>Price</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {priceHistory.map((item, index) => (
+                      <TableRow key={index}>
+                        <TableCell>{formatDate(item.effdate)}</TableCell>
+                        <TableCell>{formatPrice(item.unitprice)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end space-x-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => {
+                                setSelectedPrice(item);
+                                setNewPrice(item.unitprice?.toString() || "");
+                                setIsEditDialogOpen(true);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => {
+                                setSelectedPrice(item);
+                                setIsDeleteDialogOpen(true);
+                              }}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {priceHistory.map((item, index) => (
-                        <TableRow key={index}>
-                          <TableCell>{formatDate(item.effdate)}</TableCell>
-                          <TableCell>
-                            {item.unitprice !== null ? (
-                              <div className="flex items-center gap-1">
-                                <DollarSign className="h-4 w-4 text-muted-foreground" />
-                                {new Intl.NumberFormat('en-US', {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2
-                                }).format(item.unitprice)}
-                              </div>
-                            ) : (
-                              "N/A"
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex space-x-2">
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedPrice(item);
-                                  setNewPrice(item.unitprice?.toString() || "");
-                                  setIsEditDialogOpen(true);
-                                }}
-                              >
-                                Edit
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => {
-                                  setSelectedPrice(item);
-                                  setIsDeleteDialogOpen(true);
-                                }}
-                              >
-                                Delete
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         )}
       </div>
 
