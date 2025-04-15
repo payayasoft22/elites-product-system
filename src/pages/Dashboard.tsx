@@ -5,6 +5,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Package, DollarSign, TrendingUp, Users, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+import { useAuth } from "@/contexts/AuthContext";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+interface AuthUser {
+  id: string;
+  email: string;
+  last_sign_in_at?: string | null;
+  user_metadata?: {
+    full_name?: string;
+    name?: string;
+  };
+}
 
 interface PriceChange {
   prodcode: string;
@@ -19,12 +31,6 @@ interface RecentProduct {
   unit: string | null;
   created_at: string;
   unitprice: number | null;
-}
-
-interface AuthUser {
-  id: string;
-  email: string;
-  last_sign_in_at?: string | null;
 }
 
 const StatCard = ({ title, value, icon, description }: { 
@@ -51,11 +57,13 @@ const Dashboard = () => {
   const [products, setProducts] = useState<number>(0);
   const [avgPrice, setAvgPrice] = useState<number | null>(null);
   const [priceUpdates, setPriceUpdates] = useState<number>(0);
-  const [activeUsers, setActiveUsers] = useState<number>(0);
   const [recentPriceChanges, setRecentPriceChanges] = useState<PriceChange[]>([]);
   const [recentProducts, setRecentProducts] = useState<RecentProduct[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [lastLogin, setLastLogin] = useState<string>("");
+  const [activeUsers, setActiveUsers] = useState<AuthUser[]>([]);
+  const [registeredUsers, setRegisteredUsers] = useState<AuthUser[]>([]);
+  const { user: currentUser } = useAuth();
 
   const formatPrice = (price: number | null): string => {
     if (price === null) return "N/A";
@@ -106,7 +114,7 @@ const Dashboard = () => {
           
           if (authError) {
             console.error("Error fetching users:", authError);
-            setActiveUsers(0);
+            setActiveUsers([]);
           } else if (authData && authData.users) {
             // Filter active users (those who have signed in within the last 7 days)
             const sevenDaysAgo = new Date();
@@ -120,7 +128,7 @@ const Dashboard = () => {
               return false;
             });
             
-            setActiveUsers(recentUsers.length);
+            setActiveUsers(recentUsers);
           }
         } catch (error) {
           console.error("Error fetching auth users:", error);
@@ -215,6 +223,63 @@ const Dashboard = () => {
     fetchDashboardData();
   }, []);
 
+  // Add new useEffect for users data
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const { data: { users }, error } = await supabase.auth.admin.listUsers();
+        if (error) {
+          console.error("Error fetching users:", error);
+          return;
+        }
+        if (users) {
+          setRegisteredUsers(users);
+        }
+      } catch (error) {
+        console.error("Error fetching users:", error);
+      }
+    };
+
+    fetchUsers();
+
+    // Set up realtime presence for active users
+    const channel = supabase.channel('user_presence')
+      .on('presence', { event: 'sync' }, () => {
+        const presenceState = channel.presenceState();
+        const currentActiveUserIds = Object.values(presenceState)
+          .flat()
+          .map((presence: any) => presence.user_id)
+          .filter((id): id is string => Boolean(id));
+
+        // Update active users based on presence
+        const currentActiveUsers = registeredUsers.filter(user => 
+          currentActiveUserIds.includes(user.id)
+        );
+
+        // Ensure current user is included in active users
+        if (currentUser && !currentActiveUsers.some(u => u.id === currentUser.id)) {
+          const currentUserData = registeredUsers.find(u => u.id === currentUser.id);
+          if (currentUserData) {
+            currentActiveUsers.push(currentUserData);
+          }
+        }
+
+        setActiveUsers(currentActiveUsers);
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED' && currentUser) {
+          await channel.track({
+            user_id: currentUser.id,
+            online_at: new Date().toISOString(),
+          });
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser, registeredUsers]);
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
@@ -244,9 +309,9 @@ const Dashboard = () => {
           />
           <StatCard
             title="Active Users"
-            value={String(activeUsers)}
+            value={String(activeUsers.length)}
             icon={<Users className="h-4 w-4" />}
-            description="Users active in last 30 days"
+            description="Currently online users"
           />
         </div>
         
@@ -338,6 +403,45 @@ const Dashboard = () => {
               ) : (
                 <div className="text-sm text-muted-foreground">No price updates available yet.</div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Registered Users Card */}
+          <Card className="col-span-1">
+            <CardHeader>
+              <CardTitle>Registered Users</CardTitle>
+              <CardDescription>
+                All system users
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Last Login</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {registeredUsers.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell className="font-medium">
+                        {user.user_metadata?.full_name || user.user_metadata?.name || 'N/A'}
+                        {currentUser && user.id === currentUser.id ? " (You)" : ""}
+                      </TableCell>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>{user.last_sign_in_at ? format(new Date(user.last_sign_in_at), 'MMM d, yyyy') : 'Never'}</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded-full text-xs ${activeUsers.some(u => u.id === user.id) ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                          {activeUsers.some(u => u.id === user.id) ? 'Online' : 'Offline'}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </div>
