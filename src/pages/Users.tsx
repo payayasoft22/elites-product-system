@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -22,6 +22,7 @@ interface User {
 
 const Users = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeUsers, setActiveUsers] = useState<User[]>([]);
   const { toast } = useToast();
 
   // Fetch users from Supabase authentication
@@ -29,35 +30,12 @@ const Users = () => {
     queryKey: ["users"],
     queryFn: async () => {
       try {
-        // Get current auth user first
-        const { data: { user: currentUser } } = await supabase.auth.getUser();
-        
-        if (!currentUser) {
-          throw new Error("Unable to fetch current user");
-        }
-        
-        // Fetch all users from the Auth API
+        // Get all users from the Auth API
         const { data: authData, error: authError } = await supabase.auth.admin.listUsers();
         
         if (authError) {
           console.error("Error fetching users:", authError);
-          
-          // If we can't get all users, at least return the current user
-          toast({
-            title: "User Information Notice",
-            description: "Could only retrieve current user information. Admin access is required to view all users.",
-            variant: "default"
-          });
-          
-          return [{
-            id: currentUser.id,
-            name: currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || "Current User",
-            email: currentUser.email || "",
-            role: currentUser.user_metadata?.role || "User",
-            status: "active",
-            created_at: currentUser.created_at,
-            last_sign_in_at: currentUser.last_sign_in_at
-          }];
+          throw new Error("Unable to fetch users");
         }
         
         if (authData?.users && authData.users.length > 0) {
@@ -72,7 +50,6 @@ const Users = () => {
           }));
         }
         
-        // Fallback to empty array
         return [];
       } catch (error) {
         console.error("Error:", error);
@@ -80,6 +57,43 @@ const Users = () => {
       }
     }
   });
+
+  // Set up realtime subscription for user presence
+  useEffect(() => {
+    const channel = supabase.channel('user_presence')
+      .on('presence', { event: 'sync' }, () => {
+        const presenceState = channel.presenceState();
+        // Convert presence state to active users
+        const currentActiveUsers = Object.values(presenceState)
+          .flat()
+          .map((presence: any) => presence.user_id)
+          .filter((id): id is string => Boolean(id));
+
+        // Update active users based on presence
+        if (users) {
+          const updatedActiveUsers = users.filter(user => 
+            currentActiveUsers.includes(user.id)
+          );
+          setActiveUsers(updatedActiveUsers);
+        }
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          // Track current user's presence
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            await channel.track({
+              user_id: session.user.id,
+              online_at: new Date().toISOString(),
+            });
+          }
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [users]);
 
   const filteredUsers = users?.filter(user => 
     user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -115,72 +129,97 @@ const Users = () => {
           </div>
         </div>
         
-        <Card>
-          <CardHeader>
-            <CardTitle>User Management</CardTitle>
-            <CardDescription>
-              View and manage system users.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-2">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="flex gap-4 items-center">
-                    <Skeleton className="h-12 w-12 rounded-full" />
-                    <div className="space-y-2">
-                      <Skeleton className="h-4 w-[250px]" />
-                      <Skeleton className="h-4 w-[200px]" />
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* All Users Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>All Users</CardTitle>
+              <CardDescription>
+                Total registered users: {filteredUsers?.length || 0}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="flex gap-4 items-center">
+                      <Skeleton className="h-12 w-12 rounded-full" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-[250px]" />
+                        <Skeleton className="h-4 w-[200px]" />
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            ) : error ? (
-              <div className="text-center py-4 text-red-500">
-                Error loading users: {(error as Error).message}
-              </div>
-            ) : filteredUsers?.length === 0 ? (
-              <div className="text-center py-4 text-gray-500">
-                No registered users found. When users register on your system, they will appear here.
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Joined Date</TableHead>
-                    <TableHead>Last Sign In</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredUsers?.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.name || "N/A"}</TableCell>
-                      <TableCell>{user.email || "N/A"}</TableCell>
-                      <TableCell>{user.role || "User"}</TableCell>
-                      <TableCell>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          user.status === "inactive" ? "bg-gray-100 text-gray-800" : "bg-green-100 text-green-800"
-                        }`}>
-                          {user.status === "active" ? "Active" : "Inactive"}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        {formatDate(user.created_at)}
-                      </TableCell>
-                      <TableCell>
-                        {formatDate(user.last_sign_in_at)}
-                      </TableCell>
-                    </TableRow>
                   ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+                </div>
+              ) : error ? (
+                <div className="text-center py-4 text-red-500">
+                  Error loading users: {(error as Error).message}
+                </div>
+              ) : filteredUsers?.length === 0 ? (
+                <div className="text-center py-4 text-gray-500">
+                  No users found matching your search.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Joined Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredUsers?.map((user) => (
+                      <TableRow key={user.id}>
+                        <TableCell className="font-medium">{user.name || "N/A"}</TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>{user.role}</TableCell>
+                        <TableCell>{formatDate(user.created_at)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Active Users Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Active Users</CardTitle>
+              <CardDescription>
+                Currently active users: {activeUsers.length}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {activeUsers.length === 0 ? (
+                <div className="text-center py-4 text-gray-500">
+                  No users currently active.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Last Active</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {activeUsers.map((user) => (
+                      <TableRow key={user.id}>
+                        <TableCell className="font-medium">{user.name || "N/A"}</TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>Now</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </DashboardLayout>
   );
