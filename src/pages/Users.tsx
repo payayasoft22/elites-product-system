@@ -50,7 +50,7 @@ const Users = () => {
             name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || "You",
             email: session.user.email || "",
             role: session.user.user_metadata?.role || "User",
-            status: "active",
+            status: "active" as const,
             created_at: session.user.created_at,
             last_sign_in_at: session.user.last_sign_in_at
           };
