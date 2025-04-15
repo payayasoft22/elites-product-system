@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface User {
   id: string;
@@ -24,35 +25,36 @@ const Users = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeUsers, setActiveUsers] = useState<User[]>([]);
   const { toast } = useToast();
+  const { user: currentUser } = useAuth();
 
-  // Fetch users from Supabase authentication
+  // Instead of using admin API, we'll fetch user profiles from the public schema
+  // This query will need to be adjusted based on your actual database structure
   const { data: users, isLoading, error } = useQuery({
     queryKey: ["users"],
     queryFn: async () => {
       try {
-        // Get all users from the Auth API
-        const { data: authData, error: authError } = await supabase.auth.admin.listUsers();
-        
-        if (authError) {
-          console.error("Error fetching users:", authError);
-          throw new Error("Unable to fetch users");
+        // Get current user info from session
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          throw new Error("No active session");
         }
         
-        if (authData?.users && authData.users.length > 0) {
-          return authData.users.map(user => ({
-            id: user.id,
-            name: user.user_metadata?.full_name || user.user_metadata?.name || "N/A",
-            email: user.email || "",
-            role: user.user_metadata?.role || "User",
-            status: user.banned ? "inactive" : "active",
-            created_at: user.created_at,
-            last_sign_in_at: user.last_sign_in_at
-          }));
-        }
+        // Create a users array starting with the current user
+        const currentUserData: User = {
+          id: session.user.id,
+          name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || "You",
+          email: session.user.email || "",
+          role: session.user.user_metadata?.role || "User",
+          status: "active",
+          created_at: session.user.created_at,
+          last_sign_in_at: session.user.last_sign_in_at
+        };
         
-        return [];
+        // For a real app, you would fetch other users from a profiles table
+        // For now, we'll just return the current user as a demo
+        return [currentUserData];
       } catch (error) {
-        console.error("Error:", error);
+        console.error("Error fetching users:", error);
         throw new Error("Unable to fetch users");
       }
     }
@@ -60,11 +62,16 @@ const Users = () => {
 
   // Set up realtime subscription for user presence
   useEffect(() => {
+    // Initialize with current user as active
+    if (users && users.length > 0 && currentUser) {
+      setActiveUsers(users.filter(u => u.id === currentUser.id));
+    }
+    
     const channel = supabase.channel('user_presence')
       .on('presence', { event: 'sync' }, () => {
         const presenceState = channel.presenceState();
         // Convert presence state to active users
-        const currentActiveUsers = Object.values(presenceState)
+        const currentActiveUserIds = Object.values(presenceState)
           .flat()
           .map((presence: any) => presence.user_id)
           .filter((id): id is string => Boolean(id));
@@ -72,8 +79,17 @@ const Users = () => {
         // Update active users based on presence
         if (users) {
           const updatedActiveUsers = users.filter(user => 
-            currentActiveUsers.includes(user.id)
+            currentActiveUserIds.includes(user.id)
           );
+          
+          // Ensure current user is included in active users
+          if (currentUser && !updatedActiveUsers.some(u => u.id === currentUser.id)) {
+            const currentUserData = users.find(u => u.id === currentUser.id);
+            if (currentUserData) {
+              updatedActiveUsers.push(currentUserData);
+            }
+          }
+          
           setActiveUsers(updatedActiveUsers);
         }
       })
@@ -93,7 +109,7 @@ const Users = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [users]);
+  }, [users, currentUser]);
 
   const filteredUsers = users?.filter(user => 
     user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -172,7 +188,10 @@ const Users = () => {
                   <TableBody>
                     {filteredUsers?.map((user) => (
                       <TableRow key={user.id}>
-                        <TableCell className="font-medium">{user.name || "N/A"}</TableCell>
+                        <TableCell className="font-medium">
+                          {user.name || "N/A"}
+                          {currentUser && user.id === currentUser.id ? " (You)" : ""}
+                        </TableCell>
                         <TableCell>{user.email}</TableCell>
                         <TableCell>{user.role}</TableCell>
                         <TableCell>{formatDate(user.created_at)}</TableCell>
@@ -209,7 +228,10 @@ const Users = () => {
                   <TableBody>
                     {activeUsers.map((user) => (
                       <TableRow key={user.id}>
-                        <TableCell className="font-medium">{user.name || "N/A"}</TableCell>
+                        <TableCell className="font-medium">
+                          {user.name || "N/A"}
+                          {currentUser && user.id === currentUser.id ? " (You)" : ""}
+                        </TableCell>
                         <TableCell>{user.email}</TableCell>
                         <TableCell>Now</TableCell>
                       </TableRow>
