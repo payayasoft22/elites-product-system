@@ -27,34 +27,54 @@ const Users = () => {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
 
-  // Instead of using admin API, we'll fetch user profiles from the public schema
-  // This query will need to be adjusted based on your actual database structure
+  // Query to fetch all registered users from Supabase Auth
   const { data: users, isLoading, error } = useQuery({
     queryKey: ["users"],
     queryFn: async () => {
       try {
-        // Get current user info from session
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          throw new Error("No active session");
+        // Try to fetch all users using the admin API
+        const { data, error } = await supabase.auth.admin.listUsers();
+        
+        if (error) {
+          console.error("Error fetching users with admin API:", error);
+          
+          // Fallback: If admin API fails, at least get the current user
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            throw new Error("No active session");
+          }
+          
+          // Create a users array starting with the current user
+          const currentUserData: User = {
+            id: session.user.id,
+            name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || "You",
+            email: session.user.email || "",
+            role: session.user.user_metadata?.role || "User",
+            status: "active",
+            created_at: session.user.created_at,
+            last_sign_in_at: session.user.last_sign_in_at
+          };
+          
+          return [currentUserData];
         }
         
-        // Create a users array starting with the current user
-        const currentUserData: User = {
-          id: session.user.id,
-          name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || "You",
-          email: session.user.email || "",
-          role: session.user.user_metadata?.role || "User",
-          status: "active",
-          created_at: session.user.created_at,
-          last_sign_in_at: session.user.last_sign_in_at
-        };
-        
-        // For a real app, you would fetch other users from a profiles table
-        // For now, we'll just return the current user as a demo
-        return [currentUserData];
+        // Map the users from the admin API to our User interface
+        return data.users.map((user) => ({
+          id: user.id,
+          name: user.user_metadata?.full_name || user.user_metadata?.name || "N/A",
+          email: user.email || "",
+          role: user.user_metadata?.role || "User",
+          status: user.last_sign_in_at ? "active" : "inactive",
+          created_at: user.created_at,
+          last_sign_in_at: user.last_sign_in_at
+        }));
       } catch (error) {
         console.error("Error fetching users:", error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch users. Please try again later.",
+          variant: "destructive",
+        });
         throw new Error("Unable to fetch users");
       }
     }
@@ -64,7 +84,8 @@ const Users = () => {
   useEffect(() => {
     // Initialize with current user as active
     if (users && users.length > 0 && currentUser) {
-      setActiveUsers(users.filter(u => u.id === currentUser.id));
+      const initialActiveUsers = users.filter(u => u.id === currentUser.id);
+      setActiveUsers(initialActiveUsers);
     }
     
     const channel = supabase.channel('user_presence')

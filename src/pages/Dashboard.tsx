@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -8,7 +9,8 @@ import { format } from "date-fns";
 import { useAuth } from "@/contexts/AuthContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-interface AuthUser {
+// Properly define the user type from Supabase Auth
+interface AuthUserType {
   id: string;
   email: string;
   last_sign_in_at?: string | null;
@@ -61,8 +63,8 @@ const Dashboard = () => {
   const [recentProducts, setRecentProducts] = useState<RecentProduct[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [lastLogin, setLastLogin] = useState<string>("");
-  const [activeUsers, setActiveUsers] = useState<AuthUser[]>([]);
-  const [registeredUsers, setRegisteredUsers] = useState<AuthUser[]>([]);
+  const [activeUsers, setActiveUsers] = useState<AuthUserType[]>([]);
+  const [registeredUsers, setRegisteredUsers] = useState<AuthUserType[]>([]);
   const { user: currentUser } = useAuth();
 
   const formatPrice = (price: number | null): string => {
@@ -227,13 +229,23 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const { data: { users }, error } = await supabase.auth.admin.listUsers();
+        const { data, error } = await supabase.auth.admin.listUsers();
+        
         if (error) {
           console.error("Error fetching users:", error);
           return;
         }
-        if (users) {
-          setRegisteredUsers(users);
+        
+        if (data && data.users) {
+          // Ensure the users data conforms to our AuthUserType interface
+          const mappedUsers: AuthUserType[] = data.users.map(user => ({
+            id: user.id,
+            email: user.email || "",
+            last_sign_in_at: user.last_sign_in_at,
+            user_metadata: user.user_metadata
+          }));
+          
+          setRegisteredUsers(mappedUsers);
         }
       } catch (error) {
         console.error("Error fetching users:", error);
@@ -252,19 +264,21 @@ const Dashboard = () => {
           .filter((id): id is string => Boolean(id));
 
         // Update active users based on presence
-        const currentActiveUsers = registeredUsers.filter(user => 
-          currentActiveUserIds.includes(user.id)
-        );
+        if (registeredUsers.length > 0) {
+          const currentActiveUsers = registeredUsers.filter(user => 
+            currentActiveUserIds.includes(user.id)
+          );
 
-        // Ensure current user is included in active users
-        if (currentUser && !currentActiveUsers.some(u => u.id === currentUser.id)) {
-          const currentUserData = registeredUsers.find(u => u.id === currentUser.id);
-          if (currentUserData) {
-            currentActiveUsers.push(currentUserData);
+          // Ensure current user is included in active users
+          if (currentUser && !currentActiveUsers.some(u => u.id === currentUser.id)) {
+            const currentUserData = registeredUsers.find(u => u.id === currentUser.id);
+            if (currentUserData) {
+              currentActiveUsers.push(currentUserData);
+            }
           }
-        }
 
-        setActiveUsers(currentActiveUsers);
+          setActiveUsers(currentActiveUsers);
+        }
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED' && currentUser) {
