@@ -64,7 +64,7 @@ const Users = () => {
           name: user.user_metadata?.full_name || user.user_metadata?.name || "N/A",
           email: user.email || "",
           role: user.user_metadata?.role || "User",
-          status: user.last_sign_in_at ? "active" : "inactive",
+          status: user.last_sign_in_at ? "active" : "inactive" as "active" | "inactive",
           created_at: user.created_at,
           last_sign_in_at: user.last_sign_in_at
         }));

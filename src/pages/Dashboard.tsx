@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -8,8 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { useAuth } from "@/contexts/AuthContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { User } from "@supabase/supabase-js";
 
-// Properly define the user type from Supabase Auth
 interface AuthUserType {
   id: string;
   email: string;
@@ -102,7 +101,6 @@ const Dashboard = () => {
       try {
         setLoading(true);
         
-        // Fetch product count
         const { count: productCount, error: productError } = await supabase
           .from('product')
           .select('*', { count: 'exact', head: true });
@@ -110,7 +108,6 @@ const Dashboard = () => {
         if (productError) throw productError;
         setProducts(productCount || 0);
         
-        // Fetch active users from auth API
         try {
           const { data: authData, error: authError } = await supabase.auth.admin.listUsers();
           
@@ -118,27 +115,31 @@ const Dashboard = () => {
             console.error("Error fetching users:", authError);
             setActiveUsers([]);
           } else if (authData && authData.users) {
-            // Filter active users (those who have signed in within the last 7 days)
             const sevenDaysAgo = new Date();
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
             
-            const recentUsers = authData.users.filter(user => {
-              if (user.last_sign_in_at) {
-                const lastSignIn = new Date(user.last_sign_in_at);
-                return lastSignIn >= sevenDaysAgo;
-              }
-              return false;
-            });
+            const recentUsers = authData.users
+              .filter(user => {
+                if (user.last_sign_in_at) {
+                  const lastSignIn = new Date(user.last_sign_in_at);
+                  return lastSignIn >= sevenDaysAgo;
+                }
+                return false;
+              })
+              .map(user => ({
+                id: user.id,
+                email: user.email || "",
+                last_sign_in_at: user.last_sign_in_at,
+                user_metadata: user.user_metadata
+              }));
             
             setActiveUsers(recentUsers);
           }
         } catch (error) {
           console.error("Error fetching auth users:", error);
-          // Fallback to at least count current user if we can't access all users
           getUserInfo();
         }
         
-        // Fetch recent price changes from PRICEHIST table
         const { data: priceHistData, error: priceHistError } = await supabase
           .from('pricehist')
           .select(`
@@ -164,7 +165,6 @@ const Dashboard = () => {
         setRecentPriceChanges(formattedPriceChanges);
         setPriceUpdates(priceHistData.length);
         
-        // Calculate average price
         if (priceHistData.length > 0) {
           const prices = priceHistData
             .filter(item => item.unitprice !== null)
@@ -176,7 +176,6 @@ const Dashboard = () => {
           }
         }
         
-        // Fetch recent products with their latest prices from PRICEHIST
         const { data: recentProductsData, error: recentProductsError } = await supabase
           .from('product')
           .select('*')
@@ -188,7 +187,6 @@ const Dashboard = () => {
         if (recentProductsData) {
           const productsWithPrices = await Promise.all(
             recentProductsData.map(async (product) => {
-              // Get the most recent price for each product (latest effective date)
               const { data: priceData, error: priceError } = await supabase
                 .from('pricehist')
                 .select('unitprice, effdate')
@@ -225,7 +223,6 @@ const Dashboard = () => {
     fetchDashboardData();
   }, []);
 
-  // Add new useEffect for users data
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -237,7 +234,6 @@ const Dashboard = () => {
         }
         
         if (data && data.users) {
-          // Ensure the users data conforms to our AuthUserType interface
           const mappedUsers: AuthUserType[] = data.users.map(user => ({
             id: user.id,
             email: user.email || "",
@@ -254,7 +250,6 @@ const Dashboard = () => {
 
     fetchUsers();
 
-    // Set up realtime presence for active users
     const channel = supabase.channel('user_presence')
       .on('presence', { event: 'sync' }, () => {
         const presenceState = channel.presenceState();
@@ -263,13 +258,11 @@ const Dashboard = () => {
           .map((presence: any) => presence.user_id)
           .filter((id): id is string => Boolean(id));
 
-        // Update active users based on presence
         if (registeredUsers.length > 0) {
           const currentActiveUsers = registeredUsers.filter(user => 
             currentActiveUserIds.includes(user.id)
           );
 
-          // Ensure current user is included in active users
           if (currentUser && !currentActiveUsers.some(u => u.id === currentUser.id)) {
             const currentUserData = registeredUsers.find(u => u.id === currentUser.id);
             if (currentUserData) {
@@ -420,7 +413,6 @@ const Dashboard = () => {
             </CardContent>
           </Card>
 
-          {/* Registered Users Card */}
           <Card className="col-span-1">
             <CardHeader>
               <CardTitle>Registered Users</CardTitle>
