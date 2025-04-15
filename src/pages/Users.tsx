@@ -31,30 +31,23 @@ const Users = () => {
     queryKey: ["users"],
     queryFn: async () => {
       try {
-        // Get the current session
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          throw new Error("No active session");
-        }
-
-        // Get all users from the public.profiles table
-        const { data: allUsers, error: usersError } = await supabase
+        const { data: profiles, error: profilesError } = await supabase
           .from('profiles')
           .select('*');
 
-        if (usersError) {
-          throw usersError;
+        if (profilesError) {
+          throw profilesError;
         }
 
-        // Map the users to our User interface
-        const mappedUsers: User[] = allUsers.map((user) => ({
-          id: user.id,
-          name: user.first_name || user.name || "N/A",
-          email: user.email || "N/A",
-          role: user.role || "User",
-          status: user.last_sign_in_at ? "active" : "inactive" as "active" | "inactive",
-          created_at: user.created_at,
-          last_sign_in_at: user.last_sign_in_at
+        // Map the profiles to our User interface
+        const mappedUsers: User[] = profiles.map((profile: any) => ({
+          id: profile.id,
+          name: profile.first_name || profile.name || "N/A",
+          email: profile.email || "N/A",
+          role: profile.role || "User",
+          status: profile.last_sign_in_at ? "active" : "inactive" as "active" | "inactive",
+          created_at: profile.created_at,
+          last_sign_in_at: profile.last_sign_in_at
         }));
 
         return mappedUsers;
