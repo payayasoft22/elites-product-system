@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
@@ -32,42 +31,33 @@ const Users = () => {
     queryKey: ["users"],
     queryFn: async () => {
       try {
-        // Try to fetch all users using the admin API
-        const { data, error } = await supabase.auth.admin.listUsers();
-        
-        if (error) {
-          console.error("Error fetching users with admin API:", error);
-          
-          // Fallback: If admin API fails, at least get the current user
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) {
-            throw new Error("No active session");
-          }
-          
-          // Create a users array starting with the current user
-          const currentUserData: User = {
-            id: session.user.id,
-            name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || "You",
-            email: session.user.email || "",
-            role: session.user.user_metadata?.role || "User",
-            status: "active" as const,
-            created_at: session.user.created_at,
-            last_sign_in_at: session.user.last_sign_in_at
-          };
-          
-          return [currentUserData];
+        // Get the current session
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          throw new Error("No active session");
         }
-        
-        // Map the users from the admin API to our User interface
-        return data.users.map((user) => ({
+
+        // Get all users from the public.profiles table
+        const { data: allUsers, error: usersError } = await supabase
+          .from('profiles')
+          .select('*');
+
+        if (usersError) {
+          throw usersError;
+        }
+
+        // Map the users to our User interface
+        const mappedUsers: User[] = allUsers.map((user) => ({
           id: user.id,
-          name: user.user_metadata?.full_name || user.user_metadata?.name || "N/A",
-          email: user.email || "",
-          role: user.user_metadata?.role || "User",
+          name: user.first_name || user.name || "N/A",
+          email: user.email || "N/A",
+          role: user.role || "User",
           status: user.last_sign_in_at ? "active" : "inactive" as "active" | "inactive",
           created_at: user.created_at,
           last_sign_in_at: user.last_sign_in_at
         }));
+
+        return mappedUsers;
       } catch (error) {
         console.error("Error fetching users:", error);
         toast({
@@ -75,29 +65,21 @@ const Users = () => {
           description: "Failed to fetch users. Please try again later.",
           variant: "destructive",
         });
-        throw new Error("Unable to fetch users");
+        throw error;
       }
     }
   });
 
   // Set up realtime subscription for user presence
   useEffect(() => {
-    // Initialize with current user as active
-    if (users && users.length > 0 && currentUser) {
-      const initialActiveUsers = users.filter(u => u.id === currentUser.id);
-      setActiveUsers(initialActiveUsers);
-    }
-    
     const channel = supabase.channel('user_presence')
       .on('presence', { event: 'sync' }, () => {
         const presenceState = channel.presenceState();
-        // Convert presence state to active users
         const currentActiveUserIds = Object.values(presenceState)
           .flat()
           .map((presence: any) => presence.user_id)
           .filter((id): id is string => Boolean(id));
 
-        // Update active users based on presence
         if (users) {
           const updatedActiveUsers = users.filter(user => 
             currentActiveUserIds.includes(user.id)
@@ -115,15 +97,11 @@ const Users = () => {
         }
       })
       .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          // Track current user's presence
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            await channel.track({
-              user_id: session.user.id,
-              online_at: new Date().toISOString(),
-            });
-          }
+        if (status === 'SUBSCRIBED' && currentUser) {
+          await channel.track({
+            user_id: currentUser.id,
+            online_at: new Date().toISOString(),
+          });
         }
       });
 
