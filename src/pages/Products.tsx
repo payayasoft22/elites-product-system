@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -288,7 +289,8 @@ const Products = () => {
     try {
       const { data: productsData, error: productsError } = await supabase
         .from('product')
-        .select('*');
+        .select('*')
+        .order('prodcode', { ascending: true }); // Ensure alphabetical order by product code
 
       if (productsError) throw productsError;
 
@@ -487,7 +489,8 @@ const Products = () => {
     : products.filter(product => 
         product.prodcode.toLowerCase().includes(searchQuery.toLowerCase()) || 
         (product.description?.toLowerCase() || "").includes(searchQuery.toLowerCase())
-      );
+      )
+      .sort((a, b) => a.prodcode.localeCompare(b.prodcode)); // Sort filtered results alphabetically
 
   useEffect(() => {
     setCurrentPage(1);
