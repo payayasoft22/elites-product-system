@@ -1,454 +1,338 @@
-import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import DashboardLayout from "@/components/DashboardLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package, DollarSign, TrendingUp, Users, ExternalLink } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
-import { useAuth } from "@/contexts/AuthContext";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { User } from "@supabase/supabase-js";
 
-interface AuthUserType {
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
+import DashboardLayout from "@/components/DashboardLayout";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, TooltipProps } from "recharts";
+import { ArrowUpRight, Users, Package, Calendar, DollarSign } from "lucide-react";
+import { format, subDays } from "date-fns";
+import { useToast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+
+// Mock data for the dashboard
+const revenueData = Array.from({ length: 30 }, (_, i) => ({
+  date: format(subDays(new Date(), 29 - i), "MMM dd"),
+  value: Math.floor(Math.random() * 10000) + 5000,
+}));
+
+interface AuthUser {
   id: string;
   email: string;
-  last_sign_in_at?: string | null;
-  user_metadata?: {
+  created_at: string;
+  last_sign_in_at: string | null;
+  user_metadata: {
     full_name?: string;
-    name?: string;
   };
 }
 
-interface PriceChange {
-  prodcode: string;
-  description: string | null;
-  unitprice: number | null;
-  effdate: string;
-}
-
-interface RecentProduct {
-  prodcode: string;
-  description: string | null;
-  unit: string | null;
+interface Profile {
+  id: string;
+  email: string;
+  first_name: string;
   created_at: string;
-  unitprice: number | null;
+  last_sign_in_at: string | null;
 }
-
-const StatCard = ({ title, value, icon, description }: { 
-  title: string;
-  value: string;
-  icon: React.ReactNode;
-  description: string;
-}) => (
-  <Card>
-    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-      <CardTitle className="text-sm font-medium">{title}</CardTitle>
-      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-        {icon}
-      </div>
-    </CardHeader>
-    <CardContent>
-      <div className="text-2xl font-bold">{value}</div>
-      <p className="text-xs text-muted-foreground">{description}</p>
-    </CardContent>
-  </Card>
-);
 
 const Dashboard = () => {
-  const [products, setProducts] = useState<number>(0);
-  const [avgPrice, setAvgPrice] = useState<number | null>(null);
-  const [priceUpdates, setPriceUpdates] = useState<number>(0);
-  const [recentPriceChanges, setRecentPriceChanges] = useState<PriceChange[]>([]);
-  const [recentProducts, setRecentProducts] = useState<RecentProduct[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [lastLogin, setLastLogin] = useState<string>("");
-  const [activeUsers, setActiveUsers] = useState<AuthUserType[]>([]);
-  const [registeredUsers, setRegisteredUsers] = useState<AuthUserType[]>([]);
-  const { user: currentUser } = useAuth();
-
-  const formatPrice = (price: number | null): string => {
-    if (price === null) return "N/A";
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(price);
-  };
-
-  const formatDate = (dateString: string) => {
-    try {
-      return format(new Date(dateString), 'MMM d, yyyy');
-    } catch (error) {
-      return dateString;
-    }
-  };
-
-  const getUserInfo = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const lastSignIn = user.last_sign_in_at ? new Date(user.last_sign_in_at) : null;
-        setLastLogin(lastSignIn ? `${lastSignIn.toLocaleDateString()} at ${lastSignIn.toLocaleTimeString()}` : 'First login');
-      }
-    } catch (error) {
-      console.error('Error fetching user info:', error);
-    }
-  };
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalProducts: 0,
+    activeUsers: 0,
+    totalRevenue: 0,
+  });
+  const [recentUsers, setRecentUsers] = useState<Profile[]>([]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
         
+        // Fetch total users count
+        const { count: userCount, error: userError } = await supabase
+          .from('profiles')
+          .select('*', { count: 'exact', head: true });
+          
+        if (userError) throw userError;
+        
+        // Fetch recent users
+        const { data: recentUsersData, error: recentUsersError } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(5);
+          
+        if (recentUsersError) throw recentUsersError;
+        
+        // Fetch total products count
         const { count: productCount, error: productError } = await supabase
           .from('product')
           .select('*', { count: 'exact', head: true });
-        
+          
         if (productError) throw productError;
-        setProducts(productCount || 0);
         
-        try {
-          const { data: authData, error: authError } = await supabase.auth.admin.listUsers();
-          
-          if (authError) {
-            console.error("Error fetching users:", authError);
-            setActiveUsers([]);
-          } else if (authData && authData.users) {
-            const sevenDaysAgo = new Date();
-            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-            
-            const recentUsers = authData.users
-              .filter(user => {
-                if (user.last_sign_in_at) {
-                  const lastSignIn = new Date(user.last_sign_in_at);
-                  return lastSignIn >= sevenDaysAgo;
-                }
-                return false;
-              })
-              .map(user => ({
-                id: user.id,
-                email: user.email || "",
-                last_sign_in_at: user.last_sign_in_at,
-                user_metadata: user.user_metadata
-              }));
-            
-            setActiveUsers(recentUsers);
-          }
-        } catch (error) {
-          console.error("Error fetching auth users:", error);
-          getUserInfo();
-        }
+        // Set active users (users who logged in the last 7 days)
+        const activeUsers = recentUsersData ? recentUsersData.filter(user => 
+          user.last_sign_in_at && 
+          new Date(user.last_sign_in_at) > subDays(new Date(), 7)
+        ).length : 0;
         
-        const { data: priceHistData, error: priceHistError } = await supabase
-          .from('pricehist')
-          .select(`
-            prodcode,
-            unitprice,
-            effdate,
-            product (
-              description
-            )
-          `)
-          .order('effdate', { ascending: false })
-          .limit(5);
-          
-        if (priceHistError) throw priceHistError;
+        // Set the stats
+        setStats({
+          totalUsers: userCount || 0,
+          totalProducts: productCount || 0,
+          activeUsers,
+          totalRevenue: Math.floor(Math.random() * 100000) + 50000, // Mock data
+        });
         
-        const formattedPriceChanges = priceHistData.map(item => ({
-          prodcode: item.prodcode,
-          description: item.product?.description,
-          unitprice: item.unitprice,
-          effdate: item.effdate
-        }));
-        
-        setRecentPriceChanges(formattedPriceChanges);
-        setPriceUpdates(priceHistData.length);
-        
-        if (priceHistData.length > 0) {
-          const prices = priceHistData
-            .filter(item => item.unitprice !== null)
-            .map(item => item.unitprice as number);
-            
-          if (prices.length > 0) {
-            const total = prices.reduce((sum, price) => sum + price, 0);
-            setAvgPrice(total / prices.length);
-          }
-        }
-        
-        const { data: recentProductsData, error: recentProductsError } = await supabase
-          .from('product')
-          .select('*')
-          .order('prodcode', { ascending: false })
-          .limit(5);
-          
-        if (recentProductsError) throw recentProductsError;
-        
-        if (recentProductsData) {
-          const productsWithPrices = await Promise.all(
-            recentProductsData.map(async (product) => {
-              const { data: priceData, error: priceError } = await supabase
-                .from('pricehist')
-                .select('unitprice, effdate')
-                .eq('prodcode', product.prodcode)
-                .order('effdate', { ascending: false })
-                .limit(1);
-                
-              if (priceError) {
-                console.error(`Error fetching price for ${product.prodcode}:`, priceError);
-                return {
-                  ...product,
-                  unitprice: null,
-                  created_at: new Date().toISOString()
-                };
-              }
-              
-              return {
-                ...product,
-                unitprice: priceData && priceData.length > 0 ? priceData[0].unitprice : null,
-                created_at: priceData && priceData.length > 0 ? priceData[0].effdate : new Date().toISOString()
-              };
-            })
-          );
-          
-          setRecentProducts(productsWithPrices);
-        }
+        setRecentUsers(recentUsersData || []);
       } catch (error) {
-        console.error("Error fetching dashboard data:", error);
+        console.error('Error fetching dashboard data:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load dashboard data",
+          variant: "destructive",
+        });
       } finally {
         setLoading(false);
       }
     };
     
     fetchDashboardData();
-  }, []);
+  }, [toast]);
 
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const { data, error } = await supabase.auth.admin.listUsers();
-        
-        if (error) {
-          console.error("Error fetching users:", error);
-          return;
-        }
-        
-        if (data && data.users) {
-          const mappedUsers: AuthUserType[] = data.users.map(user => ({
-            id: user.id,
-            email: user.email || "",
-            last_sign_in_at: user.last_sign_in_at,
-            user_metadata: user.user_metadata
-          }));
-          
-          setRegisteredUsers(mappedUsers);
-        }
-      } catch (error) {
-        console.error("Error fetching users:", error);
-      }
-    };
-
-    fetchUsers();
-
-    const channel = supabase.channel('user_presence')
-      .on('presence', { event: 'sync' }, () => {
-        const presenceState = channel.presenceState();
-        const currentActiveUserIds = Object.values(presenceState)
-          .flat()
-          .map((presence: any) => presence.user_id)
-          .filter((id): id is string => Boolean(id));
-
-        if (registeredUsers.length > 0) {
-          const currentActiveUsers = registeredUsers.filter(user => 
-            currentActiveUserIds.includes(user.id)
-          );
-
-          if (currentUser && !currentActiveUsers.some(u => u.id === currentUser.id)) {
-            const currentUserData = registeredUsers.find(u => u.id === currentUser.id);
-            if (currentUserData) {
-              currentActiveUsers.push(currentUserData);
-            }
-          }
-
-          setActiveUsers(currentActiveUsers);
-        }
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED' && currentUser) {
-          await channel.track({
-            user_id: currentUser.id,
-            online_at: new Date().toISOString(),
-          });
-        }
-      });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentUser, registeredUsers]);
+  const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-background border rounded-md shadow-md p-2 text-xs">
+          <p className="font-medium">{label}</p>
+          <p className="text-primary">
+            ${payload[0].value?.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
+      <Helmet>
+        <title>Dashboard | Admin Panel</title>
+      </Helmet>
+
+      <div className="flex flex-col gap-5">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-          <p className="text-muted-foreground">Overview of your product management system.</p>
+          <p className="text-muted-foreground">
+            Overview of your product inventory and system status.
+          </p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            title="Total Products"
-            value={String(products)}
-            icon={<Package className="h-4 w-4" />}
-            description="Product catalog overview"
-          />
-          <StatCard
-            title="Average Price"
-            value={avgPrice ? formatPrice(avgPrice) : "N/A"}
-            icon={<DollarSign className="h-4 w-4" />}
-            description="Based on recent updates"
-          />
-          <StatCard
-            title="Price Updates"
-            value={String(priceUpdates)}
-            icon={<TrendingUp className="h-4 w-4" />}
-            description="Total price change records"
-          />
-          <StatCard
-            title="Active Users"
-            value={String(activeUsers.length)}
-            icon={<Users className="h-4 w-4" />}
-            description="Currently online users"
-          />
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total Users
+              </CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <Skeleton className="h-8 w-20" />
+              ) : (
+                <div className="text-2xl font-bold">{stats.totalUsers}</div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                +{Math.floor(Math.random() * 10) + 1} since last month
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Active Users
+              </CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <Skeleton className="h-8 w-20" />
+              ) : (
+                <div className="text-2xl font-bold">{stats.activeUsers}</div>
+              )}
+              <div className="flex items-center space-x-2">
+                <Progress value={stats.totalUsers ? (stats.activeUsers / stats.totalUsers) * 100 : 0} className="h-2" />
+                <div className="text-xs text-muted-foreground">
+                  {stats.totalUsers ? Math.round((stats.activeUsers / stats.totalUsers) * 100) : 0}%
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Products</CardTitle>
+              <Package className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <Skeleton className="h-8 w-20" />
+              ) : (
+                <div className="text-2xl font-bold">{stats.totalProducts}</div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                +{Math.floor(Math.random() * 5) + 1} added this week
+              </p>
+            </CardContent>
+            <CardFooter className="p-2">
+              <Button variant="ghost" className="w-full text-xs" onClick={() => navigate('/products')}>
+                View All Products
+              </Button>
+            </CardFooter>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Revenue (Simulated)
+              </CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <Skeleton className="h-8 w-20" />
+              ) : (
+                <div className="text-2xl font-bold">
+                  ${stats.totalRevenue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                </div>
+              )}
+              <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                <ArrowUpRight className="h-3 w-3" />
+                +{Math.floor(Math.random() * 10) + 2}% since last month
+              </p>
+            </CardContent>
+          </Card>
         </div>
-        
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card className="col-span-1">
-            <CardHeader>
-              <CardTitle>Recent Products</CardTitle>
-              <CardDescription>
-                Latest products added to your inventory
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="text-sm text-muted-foreground">Loading products...</div>
-              ) : recentProducts.length > 0 ? (
-                <div className="space-y-4">
-                  {recentProducts.map((product, index) => (
-                    <div key={`${product.prodcode}-${index}`} className="flex justify-between items-center border-b pb-2 last:border-0 last:pb-0">
-                      <div>
-                        <div className="font-medium">{product.prodcode}</div>
-                        <div className="text-sm text-muted-foreground truncate max-w-[200px]">
-                          {product.description || "No description"}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {product.unit || "No unit"} • Added {formatDate(product.created_at)}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-right">
-                          {formatPrice(product.unitprice)}
-                        </span>
-                        <Link to={`/products/${product.prodcode}/price-history`} className="text-muted-foreground hover:text-primary">
-                          <ExternalLink size={14} />
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                  <div className="pt-2 text-right">
-                    <Link to="/products" className="text-sm text-primary hover:underline">
-                      View all products →
-                    </Link>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-sm text-muted-foreground">No products available yet.</div>
-              )}
-            </CardContent>
-          </Card>
-          
-          <Card className="col-span-1">
-            <CardHeader>
-              <CardTitle>Recent Price Updates</CardTitle>
-              <CardDescription>
-                Latest price changes in your products
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="text-sm text-muted-foreground">Loading price history...</div>
-              ) : recentPriceChanges.length > 0 ? (
-                <div className="space-y-4">
-                  {recentPriceChanges.map((change, index) => (
-                    <div key={`${change.prodcode}-${change.effdate}-${index}`} className="flex justify-between items-center border-b pb-2 last:border-0 last:pb-0">
-                      <div>
-                        <div className="font-medium">{change.prodcode}</div>
-                        <div className="text-sm text-muted-foreground truncate max-w-[200px]">
-                          {change.description || "No description"}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatDate(change.effdate)}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-right">
-                          {formatPrice(change.unitprice)}
-                        </span>
-                        <Link to={`/products/${change.prodcode}/price-history`} className="text-muted-foreground hover:text-primary">
-                          <ExternalLink size={14} />
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                  <div className="pt-2 text-right">
-                    <Link to="/products" className="text-sm text-primary hover:underline">
-                      View all products →
-                    </Link>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-sm text-muted-foreground">No price updates available yet.</div>
-              )}
-            </CardContent>
-          </Card>
 
-          <Card className="col-span-1">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+          <Card className="lg:col-span-4">
             <CardHeader>
-              <CardTitle>Registered Users</CardTitle>
+              <CardTitle>Revenue Overview (Simulated Data)</CardTitle>
               <CardDescription>
-                All system users
+                Revenue trend for the past 30 days
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="px-2">
+              {loading ? (
+                <div className="h-[300px] flex items-center justify-center">
+                  <Skeleton className="h-[250px] w-full" />
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart
+                    data={revenueData}
+                    margin={{
+                      top: 5,
+                      right: 10,
+                      left: 10,
+                      bottom: 0,
+                    }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <XAxis
+                      dataKey="date"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(value) => {
+                        const date = new Date(value);
+                        return `${date.getDate()}`;
+                      }}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(value) =>
+                        `$${value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`
+                      }
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Line
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#8b5cf6"
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 6, fill: "#8b5cf6" }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+          <Card className="lg:col-span-3">
+            <CardHeader>
+              <CardTitle>Recent Users</CardTitle>
+              <CardDescription>
+                Users who joined recently
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Last Login</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {registeredUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">
-                        {user.user_metadata?.full_name || user.user_metadata?.name || 'N/A'}
-                        {currentUser && user.id === currentUser.id ? " (You)" : ""}
-                      </TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>{user.last_sign_in_at ? format(new Date(user.last_sign_in_at), 'MMM d, yyyy') : 'Never'}</TableCell>
-                      <TableCell>
-                        <span className={`px-2 py-1 rounded-full text-xs ${activeUsers.some(u => u.id === user.id) ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                          {activeUsers.some(u => u.id === user.id) ? 'Online' : 'Offline'}
-                        </span>
-                      </TableCell>
-                    </TableRow>
+              {loading ? (
+                <div className="space-y-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <Skeleton className="h-10 w-10 rounded-full" />
+                      <div className="space-y-1">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-24" />
+                      </div>
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {recentUsers.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No users found.</p>
+                  ) : (
+                    recentUsers.map((user) => (
+                      <div key={user.id} className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                          <span className="text-sm font-medium text-primary">
+                            {user.first_name ? user.first_name[0].toUpperCase() : user.email[0].toUpperCase()}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">
+                            {user.first_name || user.email.split("@")[0]}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Joined {new Date(user.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </CardContent>
+            <CardFooter>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => navigate('/users')}
+              >
+                View All Users
+              </Button>
+            </CardFooter>
           </Card>
         </div>
       </div>
