@@ -8,10 +8,12 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, TooltipProps } from "recharts";
-import { ArrowUpRight, Users, Package, Calendar, DollarSign } from "lucide-react";
-import { format, subDays } from "date-fns";
+import { ArrowUpRight, Package, Calendar, DollarSign, Clock } from "lucide-react";
+import { format, subDays, parseISO } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Product } from "@/components/products/types";
 
 // Mock data for the dashboard
 const revenueData = Array.from({ length: 30 }, (_, i) => ({
@@ -19,22 +21,14 @@ const revenueData = Array.from({ length: 30 }, (_, i) => ({
   value: Math.floor(Math.random() * 10000) + 5000,
 }));
 
-interface Profile {
-  id: string;
-  email: string;
-  first_name: string;
-  created_at: string;
-  last_sign_in_at: string | null;
-}
-
 const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
+  const [recentProducts, setRecentProducts] = useState<Product[]>([]);
+  const [recentPriceUpdates, setRecentPriceUpdates] = useState<any[]>([]);
   const [stats, setStats] = useState({
-    totalUsers: 0,
     totalProducts: 0,
-    activeUsers: 0,
     totalRevenue: 0,
   });
 
@@ -43,13 +37,6 @@ const Dashboard = () => {
       try {
         setLoading(true);
         
-        // Fetch total users count
-        const { count: userCount, error: userError } = await supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true });
-          
-        if (userError) throw userError;
-        
         // Fetch total products count
         const { count: productCount, error: productError } = await supabase
           .from('product')
@@ -57,14 +44,45 @@ const Dashboard = () => {
           
         if (productError) throw productError;
         
-        // Set active users (arbitrary calculation for demo)
-        const activeUsers = Math.floor((userCount || 0) * 0.7);
+        // Fetch most recent products (top 5)
+        const { data: recentProductsData, error: recentProductsError } = await supabase
+          .from('product')
+          .select('prodcode, description, unit')
+          .order('prodcode', { ascending: false })
+          .limit(5);
+          
+        if (recentProductsError) throw recentProductsError;
         
-        // Set the stats
+        // Fetch recent price updates
+        const { data: priceUpdatesData, error: priceUpdatesError } = await supabase
+          .from('pricehist')
+          .select('prodcode, unitprice, effdate')
+          .order('effdate', { ascending: false })
+          .limit(5);
+          
+        if (priceUpdatesError) throw priceUpdatesError;
+        
+        // Enrich price updates with product descriptions
+        const enrichedPriceUpdates = await Promise.all(
+          (priceUpdatesData || []).map(async (update) => {
+            const { data: productData } = await supabase
+              .from('product')
+              .select('description')
+              .eq('prodcode', update.prodcode)
+              .single();
+              
+            return {
+              ...update,
+              description: productData?.description || 'Unknown product'
+            };
+          })
+        );
+        
+        // Set the stats and data
+        setRecentProducts(recentProductsData || []);
+        setRecentPriceUpdates(enrichedPriceUpdates || []);
         setStats({
-          totalUsers: userCount || 0,
           totalProducts: productCount || 0,
-          activeUsers,
           totalRevenue: Math.floor(Math.random() * 100000) + 50000, // Mock data
         });
       } catch (error) {
@@ -96,6 +114,24 @@ const Dashboard = () => {
     return null;
   };
 
+  const formatPrice = (price: number | null): string => {
+    if (price === null) return "N/A";
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(price);
+  };
+
+  const formatDate = (dateString: string): string => {
+    try {
+      return format(parseISO(dateString), 'MMM dd, yyyy');
+    } catch (e) {
+      return dateString;
+    }
+  };
+
   return (
     <DashboardLayout>
       <Helmet>
@@ -110,46 +146,7 @@ const Dashboard = () => {
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Users
-              </CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                <div className="text-2xl font-bold">{stats.totalUsers}</div>
-              )}
-              <p className="text-xs text-muted-foreground">
-                +{Math.floor(Math.random() * 10) + 1} since last month
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Active Users
-              </CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                <div className="text-2xl font-bold">{stats.activeUsers}</div>
-              )}
-              <div className="flex items-center space-x-2">
-                <Progress value={stats.totalUsers ? (stats.activeUsers / stats.totalUsers) * 100 : 0} className="h-2" />
-                <div className="text-xs text-muted-foreground">
-                  {stats.totalUsers ? Math.round((stats.activeUsers / stats.totalUsers) * 100) : 0}%
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid gap-4 md:grid-cols-2">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Products</CardTitle>
@@ -162,7 +159,7 @@ const Dashboard = () => {
                 <div className="text-2xl font-bold">{stats.totalProducts}</div>
               )}
               <p className="text-xs text-muted-foreground">
-                +{Math.floor(Math.random() * 5) + 1} added this week
+                Manage your product inventory
               </p>
             </CardContent>
             <CardFooter className="p-2">
@@ -171,6 +168,7 @@ const Dashboard = () => {
               </Button>
             </CardFooter>
           </Card>
+          
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -194,8 +192,117 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-7">
-          <Card className="col-span-7">
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card className="col-span-1">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Package className="mr-2 h-4 w-4" />
+                Recent Products
+              </CardTitle>
+              <CardDescription>Latest products added to your inventory</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="space-y-2">
+                  {[...Array(3)].map((_, idx) => (
+                    <Skeleton key={idx} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : recentProducts.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Code</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Unit</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentProducts.map((product) => (
+                      <TableRow key={product.prodcode}>
+                        <TableCell className="font-medium">{product.prodcode}</TableCell>
+                        <TableCell>{product.description || "—"}</TableCell>
+                        <TableCell>{product.unit || "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="text-center py-4 text-muted-foreground">
+                  No products found.
+                </div>
+              )}
+            </CardContent>
+            <CardFooter>
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                onClick={() => navigate('/products')}
+              >
+                View All Products
+              </Button>
+            </CardFooter>
+          </Card>
+          
+          <Card className="col-span-1">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Clock className="mr-2 h-4 w-4" />
+                Recent Price Updates
+              </CardTitle>
+              <CardDescription>Latest price changes for products</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="space-y-2">
+                  {[...Array(3)].map((_, idx) => (
+                    <Skeleton key={idx} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : recentPriceUpdates.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Product</TableHead>
+                      <TableHead>Price</TableHead>
+                      <TableHead>Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentPriceUpdates.map((update, idx) => (
+                      <TableRow key={`${update.prodcode}-${update.effdate}-${idx}`}>
+                        <TableCell className="font-medium">
+                          <div>{update.prodcode}</div>
+                          <div className="text-xs text-muted-foreground truncate max-w-[150px]">
+                            {update.description}
+                          </div>
+                        </TableCell>
+                        <TableCell>{formatPrice(update.unitprice)}</TableCell>
+                        <TableCell>{formatDate(update.effdate)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="text-center py-4 text-muted-foreground">
+                  No price updates found.
+                </div>
+              )}
+            </CardContent>
+            <CardFooter>
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                onClick={() => navigate('/products')}
+              >
+                Manage Products
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-1">
+          <Card>
             <CardHeader>
               <CardTitle>Revenue Overview (Simulated Data)</CardTitle>
               <CardDescription>
