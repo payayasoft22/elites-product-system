@@ -19,16 +19,6 @@ const revenueData = Array.from({ length: 30 }, (_, i) => ({
   value: Math.floor(Math.random() * 10000) + 5000,
 }));
 
-interface AuthUser {
-  id: string;
-  email: string;
-  created_at: string;
-  last_sign_in_at: string | null;
-  user_metadata: {
-    full_name?: string;
-  };
-}
-
 interface Profile {
   id: string;
   email: string;
@@ -47,7 +37,6 @@ const Dashboard = () => {
     activeUsers: 0,
     totalRevenue: 0,
   });
-  const [recentUsers, setRecentUsers] = useState<Profile[]>([]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -61,15 +50,6 @@ const Dashboard = () => {
           
         if (userError) throw userError;
         
-        // Fetch recent users
-        const { data: recentUsersData, error: recentUsersError } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(5);
-          
-        if (recentUsersError) throw recentUsersError;
-        
         // Fetch total products count
         const { count: productCount, error: productError } = await supabase
           .from('product')
@@ -77,11 +57,8 @@ const Dashboard = () => {
           
         if (productError) throw productError;
         
-        // Set active users (users who logged in the last 7 days)
-        const activeUsers = recentUsersData ? recentUsersData.filter(user => 
-          user.last_sign_in_at && 
-          new Date(user.last_sign_in_at) > subDays(new Date(), 7)
-        ).length : 0;
+        // Set active users (arbitrary calculation for demo)
+        const activeUsers = Math.floor((userCount || 0) * 0.7);
         
         // Set the stats
         setStats({
@@ -90,8 +67,6 @@ const Dashboard = () => {
           activeUsers,
           totalRevenue: Math.floor(Math.random() * 100000) + 50000, // Mock data
         });
-        
-        setRecentUsers(recentUsersData || []);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
         toast({
@@ -219,8 +194,8 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-          <Card className="lg:col-span-4">
+        <div className="grid gap-4 md:grid-cols-7">
+          <Card className="col-span-7">
             <CardHeader>
               <CardTitle>Revenue Overview (Simulated Data)</CardTitle>
               <CardDescription>
@@ -277,62 +252,6 @@ const Dashboard = () => {
                 </ResponsiveContainer>
               )}
             </CardContent>
-          </Card>
-          <Card className="lg:col-span-3">
-            <CardHeader>
-              <CardTitle>Recent Users</CardTitle>
-              <CardDescription>
-                Users who joined recently
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="space-y-4">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <Skeleton className="h-10 w-10 rounded-full" />
-                      <div className="space-y-1">
-                        <Skeleton className="h-4 w-32" />
-                        <Skeleton className="h-3 w-24" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {recentUsers.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No users found.</p>
-                  ) : (
-                    recentUsers.map((user) => (
-                      <div key={user.id} className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                          <span className="text-sm font-medium text-primary">
-                            {user.first_name ? user.first_name[0].toUpperCase() : user.email[0].toUpperCase()}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">
-                            {user.first_name || user.email.split("@")[0]}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Joined {new Date(user.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </CardContent>
-            <CardFooter>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => navigate('/users')}
-              >
-                View All Users
-              </Button>
-            </CardFooter>
           </Card>
         </div>
       </div>

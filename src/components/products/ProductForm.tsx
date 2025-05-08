@@ -115,8 +115,9 @@ const ProductForm = ({
               <FormLabel>Unit</FormLabel>
               <FormControl>
                 <Input 
-                  placeholder="e.g., kg, piece, box" 
+                  placeholder="Enter unit (e.g., piece, kg, box)" 
                   {...field}
+                  maxLength={20}
                   onChange={(e) => {
                     field.onChange(e);
                     if (setTempProduct && tempProduct) {
