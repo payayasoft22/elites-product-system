@@ -1,16 +1,8 @@
 
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, PermissionAction } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMemo } from "react";
-
-export type PermissionAction = 
-  | 'add_product'
-  | 'delete_product'
-  | 'edit_product'
-  | 'add_price_history'
-  | 'delete_price_history'
-  | 'edit_price_history';
 
 export function usePermission() {
   const { user } = useAuth();

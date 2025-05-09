@@ -66,8 +66,9 @@ export function useAdminRequests() {
       // Transform the data to flatten it
       return data.map(req => ({
         ...req,
+        // Use optional chaining to safely access nested properties
         name: req.profiles?.name || req.profiles?.first_name || "Unknown",
-        email: req.profiles?.email
+        email: req.profiles?.email || "Unknown"
       }));
     },
     enabled: !!user,

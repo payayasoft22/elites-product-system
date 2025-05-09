@@ -17,8 +17,17 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   }
 });
 
+// Define the valid permission types
+export type PermissionAction = 
+  'add_product' | 
+  'delete_product' | 
+  'edit_product' | 
+  'add_price_history' | 
+  'delete_price_history' | 
+  'edit_price_history';
+
 // Helper function to check if a user has permission for a specific action
-export async function checkPermission(action: string): Promise<boolean> {
+export async function checkPermission(action: PermissionAction): Promise<boolean> {
   try {
     const { data: result, error } = await supabase
       .rpc('user_has_permission', { action });

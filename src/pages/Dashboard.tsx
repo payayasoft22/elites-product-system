@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
@@ -10,10 +9,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, TooltipProps } from "recharts";
 import { ArrowUpRight, Package, Calendar, DollarSign, Clock } from "lucide-react";
 import { format, subDays, parseISO } from "date-fns";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Product } from "@/components/products/types";
+import NotificationsPopover from "@/components/NotificationsPopover";
 
 // Mock data for the dashboard
 const revenueData = Array.from({ length: 30 }, (_, i) => ({
@@ -147,11 +147,16 @@ const Dashboard = () => {
       </Helmet>
 
       <div className="flex flex-col gap-5">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-          <p className="text-muted-foreground">
-            Overview of your product inventory and system status.
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+            <p className="text-muted-foreground">
+              Overview of your product inventory and system status.
+            </p>
+          </div>
+          <div>
+            <NotificationsPopover />
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
