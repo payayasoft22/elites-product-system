@@ -11,7 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 export const formSchema = z.object({
   prodcode: z.string().min(2, "Product code must be at least 2 characters"),
   description: z.string().min(3, "Description must be at least 3 characters"),
-  unit: z.string().min(1, "Unit is required"),
+  unit: z.string().min(2, "Unit must be 2-3 characters").max(3, "Unit must be 2-3 characters"),
   unitprice: z.coerce.number().min(0.01, "Price must be greater than 0")
 });
 
@@ -115,9 +115,9 @@ const ProductForm = ({
               <FormLabel>Unit</FormLabel>
               <FormControl>
                 <Input 
-                  placeholder="Enter unit (e.g., piece, box, computer, kilogram)" 
+                  placeholder="e.g., PC, EA, KG (2-3 chars)" 
                   {...field}
-                  maxLength={50}
+                  maxLength={3}
                   onChange={(e) => {
                     field.onChange(e);
                     if (setTempProduct && tempProduct) {

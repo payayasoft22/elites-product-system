@@ -78,8 +78,16 @@ const Dashboard = () => {
           })
         );
         
+        // Create products with proper typing including currentPrice
+        const typedProducts: Product[] = (recentProductsData || []).map(product => ({
+          prodcode: product.prodcode,
+          description: product.description,
+          unit: product.unit,
+          currentPrice: null // Adding the missing required property
+        }));
+        
         // Set the stats and data
-        setRecentProducts(recentProductsData || []);
+        setRecentProducts(typedProducts);
         setRecentPriceUpdates(enrichedPriceUpdates || []);
         setStats({
           totalProducts: productCount || 0,
