@@ -59,6 +59,45 @@ const NotificationsPopover = () => {
           </div>
         );
         
+      case 'product_edited':
+        return (
+          <div>
+            <p className="font-medium">Product Updated</p>
+            <p>
+              Product {notification.content.product_name || notification.content.product_code} was updated
+            </p>
+            <p className="text-xs text-muted-foreground">
+              by {notification.content.edited_by || "Unknown"} • {formatDate(notification.created_at)}
+            </p>
+          </div>
+        );
+        
+      case 'product_deleted':
+        return (
+          <div>
+            <p className="font-medium">Product Deleted</p>
+            <p>
+              Product {notification.content.product_name || notification.content.product_code} was deleted
+            </p>
+            <p className="text-xs text-muted-foreground">
+              by {notification.content.deleted_by || "Unknown"} • {formatDate(notification.created_at)}
+            </p>
+          </div>
+        );
+        
+      case 'price_history_added':
+        return (
+          <div>
+            <p className="font-medium">Price History Added</p>
+            <p>
+              New price history entry added for {notification.content.product_name || notification.content.product_code}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              by {notification.content.added_by || "Unknown"} • {formatDate(notification.created_at)}
+            </p>
+          </div>
+        );
+        
       case 'admin_request':
         return (
           <div>

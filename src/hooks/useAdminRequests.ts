@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -55,8 +54,7 @@ export function useAdminRequests() {
             email,
             first_name
           )
-        `)
-        .order("requested_at", { ascending: false });
+        `);
       
       if (error) {
         console.error("Error fetching admin requests:", error);
@@ -64,12 +62,16 @@ export function useAdminRequests() {
       }
       
       // Transform the data to flatten it
-      return data.map(req => ({
-        ...req,
-        // Use optional chaining to safely access nested properties
-        name: req.profiles?.name || req.profiles?.first_name || "Unknown",
-        email: req.profiles?.email || "Unknown"
-      }));
+      return data.map(req => {
+        // Type assertion for the profiles property
+        const profiles = req.profiles as { name?: string; first_name?: string; email?: string } | null;
+        
+        return {
+          ...req,
+          name: profiles?.name || profiles?.first_name || "Unknown",
+          email: profiles?.email || "Unknown"
+        };
+      });
     },
     enabled: !!user,
   });
