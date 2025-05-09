@@ -1,0 +1,76 @@
+
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMemo } from "react";
+
+export type PermissionAction = 
+  | 'add_product'
+  | 'delete_product'
+  | 'edit_product'
+  | 'add_price_history'
+  | 'delete_price_history'
+  | 'edit_price_history';
+
+export function usePermission() {
+  const { user } = useAuth();
+
+  const { data: rolePermissions, isLoading: permissionsLoading } = useQuery({
+    queryKey: ["role_permissions"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("role_permissions")
+        .select("*");
+      
+      if (error) {
+        console.error("Error fetching permissions:", error);
+        throw error;
+      }
+      
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const { data: userRole, isLoading: roleLoading } = useQuery({
+    queryKey: ["user_role", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user?.id)
+        .single();
+      
+      if (error) {
+        console.error("Error fetching user role:", error);
+        throw error;
+      }
+      
+      return data?.role;
+    },
+    enabled: !!user,
+  });
+
+  const isAdmin = useMemo(() => {
+    return userRole === "admin";
+  }, [userRole]);
+
+  const can = (action: PermissionAction): boolean => {
+    if (!rolePermissions || !userRole) return false;
+    
+    const permission = rolePermissions.find(
+      p => p.role === userRole && p.action === action
+    );
+    
+    return !!permission?.allowed;
+  };
+
+  const isLoading = permissionsLoading || roleLoading;
+
+  return {
+    isAdmin,
+    can,
+    userRole,
+    isLoading,
+  };
+}

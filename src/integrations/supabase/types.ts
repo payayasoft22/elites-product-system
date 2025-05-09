@@ -9,6 +9,33 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      admin_requests: {
+        Row: {
+          id: string
+          requested_at: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          requested_at?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          requested_at?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       customer: {
         Row: {
           address: string | null
@@ -136,6 +163,33 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          content: Json
+          created_at: string | null
+          id: string
+          is_read: boolean
+          type: string
+          user_id: string | null
+        }
+        Insert: {
+          content: Json
+          created_at?: string | null
+          id?: string
+          is_read?: boolean
+          type: string
+          user_id?: string | null
+        }
+        Update: {
+          content?: Json
+          created_at?: string | null
+          id?: string
+          is_read?: boolean
+          type?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       payment: {
         Row: {
           amount: number | null
@@ -239,6 +293,30 @@ export type Database = {
         }
         Relationships: []
       }
+      role_permissions: {
+        Row: {
+          action: Database["public"]["Enums"]["permission_action"]
+          allowed: boolean
+          created_at: string | null
+          id: string
+          role: Database["public"]["Enums"]["user_role"]
+        }
+        Insert: {
+          action: Database["public"]["Enums"]["permission_action"]
+          allowed: boolean
+          created_at?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["user_role"]
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["permission_action"]
+          allowed?: boolean
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["user_role"]
+        }
+        Relationships: []
+      }
       sales: {
         Row: {
           custno: string | null
@@ -313,10 +391,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      user_has_permission: {
+        Args: { action: Database["public"]["Enums"]["permission_action"] }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      permission_action:
+        | "add_product"
+        | "delete_product"
+        | "edit_product"
+        | "add_price_history"
+        | "delete_price_history"
+        | "edit_price_history"
+      user_role: "user" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -431,6 +519,16 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      permission_action: [
+        "add_product",
+        "delete_product",
+        "edit_product",
+        "add_price_history",
+        "delete_price_history",
+        "edit_price_history",
+      ],
+      user_role: ["user", "admin"],
+    },
   },
 } as const

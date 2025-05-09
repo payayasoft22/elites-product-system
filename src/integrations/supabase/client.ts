@@ -16,3 +16,21 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     autoRefreshToken: true,
   }
 });
+
+// Helper function to check if a user has permission for a specific action
+export async function checkPermission(action: string): Promise<boolean> {
+  try {
+    const { data: result, error } = await supabase
+      .rpc('user_has_permission', { action });
+
+    if (error) {
+      console.error('Error checking permission:', error);
+      return false;
+    }
+
+    return result || false;
+  } catch (error) {
+    console.error('Error in checkPermission:', error);
+    return false;
+  }
+}
