@@ -27,10 +27,12 @@ export function usePermission() {
   const { data: userRole, isLoading: roleLoading } = useQuery({
     queryKey: ["user_role", user?.id],
     queryFn: async () => {
+      if (!user?.id) return null;
+      
       const { data, error } = await supabase
         .from("profiles")
         .select("role")
-        .eq("id", user?.id)
+        .eq("id", user.id)
         .single();
       
       if (error) {
@@ -48,6 +50,9 @@ export function usePermission() {
   }, [userRole]);
 
   const can = (action: PermissionAction): boolean => {
+    // Admin can do everything
+    if (isAdmin) return true;
+    
     if (!rolePermissions || !userRole) return false;
     
     const permission = rolePermissions.find(

@@ -1,3 +1,4 @@
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -78,10 +79,12 @@ export function useAdminRequests() {
 
   const requestAdminRole = useMutation({
     mutationFn: async () => {
+      if (!user?.id) throw new Error("No user ID available");
+      
       const { error } = await supabase
         .from("admin_requests")
         .insert([
-          { user_id: user?.id }
+          { user_id: user.id }
         ]);
       
       if (error) throw error;
@@ -93,7 +96,7 @@ export function useAdminRequests() {
       });
       queryClient.invalidateQueries({ queryKey: ["admin_requests"] });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast({
         title: "Request failed",
         description: error.message || "Failed to submit admin request.",
@@ -104,13 +107,15 @@ export function useAdminRequests() {
 
   const approveRequest = useMutation({
     mutationFn: async ({ requestId, userId }: { requestId: string, userId: string }) => {
+      if (!user?.id) throw new Error("No user ID available");
+      
       // First update the admin request
       const { error: requestError } = await supabase
         .from("admin_requests")
         .update({
           status: "approved",
           resolved_at: new Date().toISOString(),
-          resolved_by: user?.id
+          resolved_by: user.id
         })
         .eq("id", requestId);
       
@@ -131,7 +136,7 @@ export function useAdminRequests() {
       });
       queryClient.invalidateQueries({ queryKey: ["admin_requests"] });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast({
         title: "Approval failed",
         description: error.message || "Failed to approve admin request.",
@@ -142,12 +147,14 @@ export function useAdminRequests() {
 
   const rejectRequest = useMutation({
     mutationFn: async (requestId: string) => {
+      if (!user?.id) throw new Error("No user ID available");
+      
       const { error } = await supabase
         .from("admin_requests")
         .update({
           status: "rejected",
           resolved_at: new Date().toISOString(),
-          resolved_by: user?.id
+          resolved_by: user.id
         })
         .eq("id", requestId);
       
@@ -160,7 +167,7 @@ export function useAdminRequests() {
       });
       queryClient.invalidateQueries({ queryKey: ["admin_requests"] });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast({
         title: "Rejection failed",
         description: error.message || "Failed to reject admin request.",

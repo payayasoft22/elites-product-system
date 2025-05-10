@@ -19,9 +19,12 @@ export function useNotifications() {
   const { data: notifications, isLoading } = useQuery({
     queryKey: ["notifications"],
     queryFn: async () => {
+      if (!user?.id) return [];
+      
       const { data, error } = await supabase
         .from("notifications")
         .select("*")
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       
       if (error) {
@@ -52,10 +55,12 @@ export function useNotifications() {
 
   const markAllAsRead = useMutation({
     mutationFn: async () => {
+      if (!user?.id) throw new Error("No user ID available");
+      
       const { error } = await supabase
         .from("notifications")
         .update({ is_read: true })
-        .eq("user_id", user?.id);
+        .eq("user_id", user.id);
       
       if (error) throw error;
     },

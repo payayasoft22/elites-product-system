@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import FirstUserSetup from "@/components/FirstUserSetup";
 
 // Import all page components
 import Login from "@/pages/Login";
@@ -17,6 +18,8 @@ import PriceHistory from "@/pages/PriceHistory";
 import Users from "@/pages/Users";
 import Settings from "@/pages/Settings";
 import NotFound from "@/pages/NotFound";
+import ResetPassword from "@/pages/ResetPassword";
+import UserPermissions from "@/pages/UserPermissions";
 
 const queryClient = new QueryClient();
 
@@ -29,9 +32,11 @@ const App = () => {
           <Sonner />
           <BrowserRouter>
             <AuthProvider>
+              <FirstUserSetup />
               <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<SignUp />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 
                 <Route 
                   path="/dashboard" 
@@ -70,6 +75,14 @@ const App = () => {
                   element={
                     <ProtectedRoute>
                       <Settings />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/user-permissions" 
+                  element={
+                    <ProtectedRoute>
+                      <UserPermissions />
                     </ProtectedRoute>
                   } 
                 />

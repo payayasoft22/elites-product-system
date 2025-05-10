@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
+import ForgotPasswordDialog from "@/components/ForgotPasswordDialog";
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
@@ -29,6 +30,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 const Login = () => {
   const { login, loading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -111,6 +113,18 @@ const Login = () => {
                           </Button>
                         </div>
                       </FormControl>
+                      <div className="flex justify-end">
+                        <Button 
+                          variant="link" 
+                          className="p-0 h-auto text-sm text-brand-600"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setForgotPasswordOpen(true);
+                          }}
+                        >
+                          Forgot password?
+                        </Button>
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -147,6 +161,11 @@ const Login = () => {
           </CardFooter>
         </Card>
       </div>
+      
+      <ForgotPasswordDialog 
+        open={forgotPasswordOpen} 
+        onOpenChange={setForgotPasswordOpen} 
+      />
     </div>
   );
 };

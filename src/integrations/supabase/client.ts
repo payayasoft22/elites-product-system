@@ -43,3 +43,23 @@ export async function checkPermission(action: PermissionAction): Promise<boolean
     return false;
   }
 }
+
+// Helper function to check if current user is the first user (admin)
+export async function isFirstUser(): Promise<boolean> {
+  try {
+    const { data: profileCount, error: countError } = await supabase
+      .from('profiles')
+      .select('id', { count: 'exact', head: true });
+    
+    if (countError) {
+      console.error('Error checking first user status:', countError);
+      return false;
+    }
+    
+    // If only one user in the system, they're the first user (admin)
+    return (profileCount?.length === 1);
+  } catch (error) {
+    console.error('Error in isFirstUser:', error);
+    return false;
+  }
+}
