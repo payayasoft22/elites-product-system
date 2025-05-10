@@ -30,11 +30,11 @@ const UserNav = () => {
     try {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('avatar_url')
+        .select('*')
         .eq('id', user?.id)
         .single();
       
-      if (profile?.avatar_url) {
+      if (profile && profile.avatar_url) {
         const { data } = await supabase.storage
           .from('avatars')
           .download(profile.avatar_url);

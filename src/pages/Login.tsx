@@ -115,12 +115,10 @@ const Login = () => {
                       </FormControl>
                       <div className="flex justify-end">
                         <Button 
+                          type="button"
                           variant="link" 
                           className="p-0 h-auto text-sm text-brand-600"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            setForgotPasswordOpen(true);
-                          }}
+                          onClick={() => setForgotPasswordOpen(true)}
                         >
                           Forgot password?
                         </Button>

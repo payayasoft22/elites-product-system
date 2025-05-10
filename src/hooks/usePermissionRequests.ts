@@ -29,17 +29,17 @@ export function usePermissionRequests() {
       if (!user?.id) return [];
       
       const { data, error } = await supabase
-        .from("permission_requests")
+        .from("admin_requests")
         .select("*")
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
+        .order("requested_at", { ascending: false });
       
       if (error) {
         console.error("Error fetching permission requests:", error);
         throw error;
       }
       
-      return data;
+      return data || [];
     },
     enabled: !!user,
   });
@@ -49,7 +49,7 @@ export function usePermissionRequests() {
     queryKey: ["permission_requests", "all"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("permission_requests")
+        .from("admin_requests")
         .select(`
           *,
           profiles:user_id (
@@ -58,7 +58,7 @@ export function usePermissionRequests() {
             name
           )
         `)
-        .order("created_at", { ascending: false });
+        .order("requested_at", { ascending: false });
       
       if (error) {
         console.error("Error fetching all permission requests:", error);
@@ -66,7 +66,7 @@ export function usePermissionRequests() {
       }
       
       // Transform data to include user details
-      return data.map((item: any) => ({
+      return (data || []).map((item: any) => ({
         ...item,
         user_email: item.profiles?.email,
         user_name: item.profiles?.first_name || item.profiles?.name || 'Unknown User'
@@ -81,7 +81,7 @@ export function usePermissionRequests() {
       if (!user?.id) throw new Error("User not authenticated");
       
       const { error } = await supabase
-        .from("permission_requests")
+        .from("admin_requests")
         .insert([
           { 
             user_id: user.id,
@@ -135,7 +135,7 @@ export function usePermissionRequests() {
       
       // Get the request details
       const { data: request, error: requestError } = await supabase
-        .from("permission_requests")
+        .from("admin_requests")
         .select("*")
         .eq("id", requestId)
         .single();
@@ -144,7 +144,7 @@ export function usePermissionRequests() {
       
       // Update request status
       const { error: updateError } = await supabase
-        .from("permission_requests")
+        .from("admin_requests")
         .update({ 
           status: "approved",
           resolved_at: new Date().toISOString(),
@@ -190,7 +190,7 @@ export function usePermissionRequests() {
       
       // Get the request details
       const { data: request, error: requestError } = await supabase
-        .from("permission_requests")
+        .from("admin_requests")
         .select("*")
         .eq("id", requestId)
         .single();
@@ -199,7 +199,7 @@ export function usePermissionRequests() {
       
       // Update request status
       const { error: updateError } = await supabase
-        .from("permission_requests")
+        .from("admin_requests")
         .update({ 
           status: "rejected",
           resolved_at: new Date().toISOString(),
@@ -240,9 +240,11 @@ export function usePermissionRequests() {
 
   // Check if user has a pending request for a specific action
   const hasPendingRequest = (action: PermissionAction): boolean => {
-    return userRequests ? userRequests.some(
+    if (!userRequests) return false;
+    
+    return userRequests.some(
       (req: any) => req.action === action && req.status === "pending"
-    ) : false;
+    );
   };
 
   return {
