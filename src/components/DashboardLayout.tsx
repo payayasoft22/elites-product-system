@@ -25,7 +25,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
             </Button>
             <Link to="/dashboard" className="flex items-center space-x-2">
               <Package className="h-6 w-6 text-primary" />
-              <span className="font-bold">Price Paladin</span>
+              <span className="font-bold">Elites Product Management</span>
             </Link>
           </div>
           

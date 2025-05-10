@@ -1,6 +1,6 @@
 
 import { useAuth } from "@/contexts/AuthContext";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,11 +11,43 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { usePermission } from "@/hooks/usePermission";
 import { Link } from "react-router-dom";
-import { Shield, User, LogOut, Settings } from "lucide-react";
+import { Shield, User, LogOut, Settings, Package, LayoutDashboard, Users } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from "react";
 
 const UserNav = () => {
   const { user, logout } = useAuth();
   const { isAdmin, userRole } = usePermission();
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  
+  useEffect(() => {
+    if (user?.id) {
+      fetchProfileAvatar();
+    }
+  }, [user]);
+
+  const fetchProfileAvatar = async () => {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('avatar_url')
+        .eq('id', user?.id)
+        .single();
+      
+      if (profile?.avatar_url) {
+        const { data } = await supabase.storage
+          .from('avatars')
+          .download(profile.avatar_url);
+          
+        if (data) {
+          const url = URL.createObjectURL(data);
+          setAvatarUrl(url);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching avatar:', error);
+    }
+  };
   
   // Get user's initials for avatar
   const getUserInitials = () => {
@@ -32,9 +64,13 @@ const UserNav = () => {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Avatar className="cursor-pointer">
-          <AvatarFallback className="bg-primary">
-            {getUserInitials()}
-          </AvatarFallback>
+          {avatarUrl ? (
+            <AvatarImage src={avatarUrl} alt="Profile" />
+          ) : (
+            <AvatarFallback className="bg-primary">
+              {getUserInitials()}
+            </AvatarFallback>
+          )}
         </Avatar>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
@@ -62,6 +98,24 @@ const UserNav = () => {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/dashboard" className="cursor-pointer flex w-full items-center">
+            <LayoutDashboard className="mr-2 h-4 w-4" />
+            <span>Dashboard</span>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link to="/products" className="cursor-pointer flex w-full items-center">
+            <Package className="mr-2 h-4 w-4" />
+            <span>Products</span>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link to="/users" className="cursor-pointer flex w-full items-center">
+            <Users className="mr-2 h-4 w-4" />
+            <span>Users</span>
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link to="/settings" className="cursor-pointer flex w-full items-center">
             <Settings className="mr-2 h-4 w-4" />
