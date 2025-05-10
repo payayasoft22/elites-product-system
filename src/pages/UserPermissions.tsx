@@ -29,7 +29,8 @@ interface PermissionRequest {
   user_id: string;
   action: PermissionAction;
   status: "pending" | "approved" | "rejected";
-  created_at: string;
+  created_at?: string;
+  requested_at?: string;
   resolved_at?: string;
   resolved_by?: string;
   user_email?: string;
@@ -90,26 +91,26 @@ const UserPermissions = () => {
 
   const fetchPermissionRequests = async () => {
     try {
+      // Use admin_requests instead of permission_requests
       const { data, error } = await supabase
-        .from('permission_requests')
+        .from('admin_requests')
         .select(`
           *,
-          profiles:user_id (
-            email,
-            first_name,
-            name
-          )
+          profiles:user_id(email, first_name, name)
         `)
-        .order('created_at', { ascending: false });
+        .order('requested_at', { ascending: false });
 
       if (error) throw error;
       
       // Transform data to include user details
-      const transformedData = data.map(item => ({
-        ...item,
-        user_email: item.profiles?.email,
-        user_name: item.profiles?.first_name || item.profiles?.name || 'Unknown User'
-      }));
+      const transformedData = (data || []).map((item: any) => {
+        return {
+          ...item,
+          user_email: item.profiles?.email || 'Unknown',
+          user_name: item.profiles?.first_name || item.profiles?.name || 'Unknown User',
+          action: item.action as PermissionAction
+        } as PermissionRequest;
+      });
       
       setPermissionRequests(transformedData);
     } catch (error: any) {
@@ -186,7 +187,7 @@ const UserPermissions = () => {
       setProcessingRequest(action);
       
       const { error } = await supabase
-        .from('permission_requests')
+        .from('admin_requests')
         .insert({
           user_id: user.id,
           action: action,
@@ -247,7 +248,7 @@ const UserPermissions = () => {
       
       // Update the request status
       const { error: updateError } = await supabase
-        .from('permission_requests')
+        .from('admin_requests')
         .update({
           status: status,
           resolved_at: new Date().toISOString(),
@@ -476,9 +477,13 @@ const UserPermissions = () => {
                                 <div className="text-sm text-muted-foreground">{request.user_email}</div>
                               </div>
                             </TableCell>
-                            <TableCell>{getActionDisplayName(request.action)}</TableCell>
                             <TableCell>
-                              {new Date(request.created_at).toLocaleDateString()}
+                              {request.action ? getActionDisplayName(request.action) : 'Unknown action'}
+                            </TableCell>
+                            <TableCell>
+                              {request.requested_at ? 
+                                new Date(request.requested_at).toLocaleDateString() : 
+                                new Date(request.created_at || '').toLocaleDateString()}
                             </TableCell>
                             <TableCell>
                               {request.status === 'pending' && (

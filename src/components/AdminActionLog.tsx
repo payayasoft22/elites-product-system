@@ -67,6 +67,10 @@ const AdminActionLog = () => {
           const content = item.content || {};
           const actionType = item.type || 'unknown';
           
+          // Safely get values from content
+          const entityId = typeof content === 'object' ? 
+            (content.product_code || content.id || '') : '';
+          
           // Determine if the action is revertible
           const canRevert = [
             'product_added',
@@ -75,16 +79,22 @@ const AdminActionLog = () => {
             'permission_change'
           ].includes(actionType);
           
+          // Safely get user information
+          const userEmail = item.profiles?.email || 'Unknown';
+          const userFirstName = item.profiles?.first_name || '';
+          const userName = item.profiles?.name || '';
+          const displayName = userFirstName || userName || 'Unknown User';
+          
           return {
             id: item.id,
             action_type: actionType,
             entity_type: getEntityTypeFromAction(actionType),
-            entity_id: content.product_code || content.id || '',
+            entity_id: entityId,
             changes: content,
-            performed_by: item.profiles?.email || 'Unknown',
+            performed_by: userEmail,
             performed_at: item.created_at,
-            user_email: item.profiles?.email,
-            user_name: item.profiles?.first_name || item.profiles?.name || 'Unknown User',
+            user_email: userEmail,
+            user_name: displayName,
             can_revert: canRevert
           };
         });
@@ -106,15 +116,20 @@ const AdminActionLog = () => {
       switch (action.action_type) {
         case 'product_added':
           // Delete the product
-          await supabase
-            .from('product')
-            .delete()
-            .eq('prodcode', action.changes.product_code);
+          if (action.changes && typeof action.changes === 'object' && 'product_code' in action.changes) {
+            await supabase
+              .from('product')
+              .delete()
+              .eq('prodcode', action.changes.product_code);
+          }
           break;
           
         case 'product_updated':
           // Revert to previous values
-          if (action.changes.previous_values) {
+          if (action.changes && 
+              typeof action.changes === 'object' && 
+              'previous_values' in action.changes && 
+              'product_code' in action.changes) {
             await supabase
               .from('product')
               .update(action.changes.previous_values)
@@ -124,7 +139,10 @@ const AdminActionLog = () => {
           
         case 'price_change':
           // Remove the latest price and revert to previous
-          if (action.changes.previous_price) {
+          if (action.changes && 
+              typeof action.changes === 'object' && 
+              'previous_price' in action.changes && 
+              'product_code' in action.changes) {
             // Delete the latest price entry
             await supabase
               .from('pricehist')
@@ -140,7 +158,7 @@ const AdminActionLog = () => {
                 .insert({
                   prodcode: action.changes.product_code,
                   unitprice: action.changes.previous_price,
-                  effdate: new Date()
+                  effdate: new Date().toISOString()
                 });
             }
           }
@@ -148,7 +166,11 @@ const AdminActionLog = () => {
           
         case 'permission_change':
           // Revert permission change
-          if (action.changes.previous_allowed !== undefined) {
+          if (action.changes && 
+              typeof action.changes === 'object' && 
+              'previous_allowed' in action.changes &&
+              'action' in action.changes &&
+              'role' in action.changes) {
             await supabase
               .from('role_permissions')
               .update({
@@ -217,6 +239,10 @@ const AdminActionLog = () => {
 
   const getActionDescription = (action: ActionLog): string => {
     const changes = action.changes || {};
+    
+    if (typeof changes !== 'object') {
+      return `${action.action_type.replace(/_/g, ' ')}`;
+    }
     
     switch (action.action_type) {
       case 'product_added':

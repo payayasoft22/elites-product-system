@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -47,14 +46,22 @@ const Settings = () => {
       if (profile) {
         // Set form fields
         setFullName(profile.first_name || '');
-        setCompanyName(profile.company || '');
-        setPhoneNumber(profile.phone_number || '');
+        
+        // Check if company property exists on profile
+        if ('company' in profile) {
+          setCompanyName(profile.company as string || '');
+        }
+        
+        // Check if phone_number property exists on profile
+        if ('phone_number' in profile) {
+          setPhoneNumber(profile.phone_number as string || '');
+        }
         
         // Fetch avatar if available
-        if (profile.avatar_url) {
+        if ('avatar_url' in profile && profile.avatar_url) {
           const { data } = await supabase.storage
             .from('avatars')
-            .download(profile.avatar_url);
+            .download(profile.avatar_url as string);
             
           if (data) {
             const url = URL.createObjectURL(data);
@@ -91,7 +98,10 @@ const Settings = () => {
       // Update user profile with the new avatar URL
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ avatar_url: fileName })
+        .update({ 
+          avatar_url: fileName,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', user?.id);
       
       if (updateError) throw updateError;
@@ -121,14 +131,18 @@ const Settings = () => {
     setSaving(true);
     
     try {
-      // Update profile data
+      // Update profile data with type-safe update
+      const updateData: Record<string, any> = {
+        first_name: fullName
+      };
+      
+      // Only add these fields if they're expected in the profiles table
+      if (companyName) updateData.company = companyName;
+      if (phoneNumber) updateData.phone_number = phoneNumber;
+      
       const { error } = await supabase
         .from('profiles')
-        .update({
-          first_name: fullName,
-          company: companyName,
-          phone_number: phoneNumber
-        })
+        .update(updateData)
         .eq('id', user?.id);
       
       if (error) throw error;
