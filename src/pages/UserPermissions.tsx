@@ -1,199 +1,154 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase, PermissionAction } from "@/integrations/supabase/client";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
 import { Switch } from "@/components/ui/switch";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { usePermission } from "@/hooks/usePermission";
 import DashboardLayout from "@/components/DashboardLayout";
+import { useAuth } from "@/contexts/AuthContext";
+import { PermissionAction } from "@/integrations/supabase/client";
 
-interface UserPermission {
-  id?: string;
-  user_id: string;
+// Define types for permissions data
+interface Permission {
+  id: string;
+  role: "user" | "admin";
   action: PermissionAction;
   allowed: boolean;
-}
-
-interface UserProfile {
-  id: string;
-  name: string;
-  role: string;
-  email: string;
+  created_at?: string;
 }
 
 const UserPermissions = () => {
-  const { isAdmin } = usePermission();
-  const queryClient = useQueryClient();
+  const [permissionsData, setPermissionsData] = useState<Permission[]>([]);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const { user } = useAuth();
   
-  // Fetch all users
-  const { data: users, isLoading: usersLoading } = useQuery({
-    queryKey: ["users_for_permissions"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, name, email, first_name, role")
-        .eq("role", "user");
-      
-      if (error) throw error;
-      
-      return data.map(user => ({
-        id: user.id,
-        name: user.name || user.first_name || "Unknown",
-        email: user.email || "Unknown",
-        role: user.role
-      })) as UserProfile[];
-    },
-    enabled: isAdmin,
-  });
+  // Group permissions by role for easier display
+  const permissionsByRole = permissionsData.reduce((acc, permission) => {
+    if (!acc[permission.role]) {
+      acc[permission.role] = [];
+    }
+    acc[permission.role].push(permission);
+    return acc;
+  }, {} as Record<string, Permission[]>);
 
-  // Fetch role permissions
-  const { data: rolePermissions, isLoading: permissionsLoading } = useQuery({
-    queryKey: ["role_permissions_all"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("role_permissions")
-        .select("*");
-      
-      if (error) throw error;
-      
-      return data;
-    },
-    enabled: isAdmin,
-  });
+  useEffect(() => {
+    fetchPermissions();
+  }, []);
 
-  // Update permission mutation
-  const updatePermission = useMutation({
-    mutationFn: async ({ role, action, allowed }: { role: string, action: PermissionAction, allowed: boolean }) => {
-      const { error } = await supabase
-        .from("role_permissions")
-        .upsert(
-          { role, action, allowed },
-          { onConflict: "role,action" }
-        );
-      
+  const fetchPermissions = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('role_permissions')
+        .select('*')
+        .order('role', { ascending: true })
+        .order('action', { ascending: true });
+
       if (error) throw error;
-      
-      return { role, action, allowed };
-    },
-    onSuccess: () => {
+      setPermissionsData(data);
+    } catch (error: any) {
+      console.error('Error fetching permissions:', error);
       toast({
-        title: "Permission updated",
-        description: "User permission has been updated successfully.",
+        title: 'Error',
+        description: 'Failed to load permission settings',
+        variant: 'destructive',
       });
-      queryClient.invalidateQueries({ queryKey: ["role_permissions"] });
-      queryClient.invalidateQueries({ queryKey: ["role_permissions_all"] });
-    },
-    onError: (error: Error) => {
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updatePermission = async (permission: Permission, allowed: boolean) => {
+    try {
+      // Make a type-safe update by explicitly defining the role type
+      const roleValue: "user" | "admin" = permission.role as "user" | "admin";
+      
+      const { error } = await supabase
+        .from('role_permissions')
+        .update({ allowed })
+        .eq('id', permission.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setPermissionsData(prevPermissions =>
+        prevPermissions.map(p => (p.id === permission.id ? { ...p, allowed } : p))
+      );
+
       toast({
-        title: "Update failed",
-        description: error.message,
-        variant: "destructive",
+        title: 'Permission Updated',
+        description: `${permission.action} permission has been ${allowed ? 'enabled' : 'disabled'} for ${permission.role} role.`,
+      });
+    } catch (error: any) {
+      console.error('Error updating permission:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update permission',
+        variant: 'destructive',
       });
     }
-  });
-
-  // Check if a permission is allowed
-  const isPermissionAllowed = (role: string, action: PermissionAction) => {
-    if (!rolePermissions) return false;
-    
-    const permission = rolePermissions.find(
-      p => p.role === role && p.action === action
-    );
-    
-    return permission?.allowed || false;
   };
 
-  // Handle toggle permission
-  const handleTogglePermission = (role: string, action: PermissionAction) => {
-    const currentValue = isPermissionAllowed(role, action);
-    updatePermission.mutate({ 
-      role, 
-      action, 
-      allowed: !currentValue 
-    });
+  const getActionDisplayName = (action: string): string => {
+    return action
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   };
 
-  if (!isAdmin) {
-    return (
-      <DashboardLayout>
-        <div className="flex justify-center items-center h-96">
-          <p className="text-xl text-muted-foreground">You do not have permission to view this page.</p>
-        </div>
-      </DashboardLayout>
-    );
+  if (!user) {
+    return <div>Loading user information...</div>;
   }
-
-  const isLoading = usersLoading || permissionsLoading;
-  const permissionTypes: PermissionAction[] = [
-    'add_product',
-    'edit_product',
-    'delete_product',
-    'add_price_history',
-    'edit_price_history',
-    'delete_price_history'
-  ];
 
   return (
     <DashboardLayout>
       <Helmet>
         <title>User Permissions | Price Paladin</title>
       </Helmet>
-
-      <div className="flex flex-col gap-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">User Permissions</h1>
+      
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">User Permissions</h2>
+          <p className="text-muted-foreground">
+            Configure what actions different user roles can perform.
+          </p>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Manage User Permissions</CardTitle>
-            <CardDescription>
-              Configure what regular users can do in the system
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-4">
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Permission</TableHead>
-                    <TableHead className="text-right">Allowed</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {permissionTypes.map((action) => (
-                    <TableRow key={action}>
-                      <TableCell className="font-medium">
-                        {action.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase())}
-                      </TableCell>
-                      <TableCell className="text-right">
+        {loading ? (
+          <div className="flex justify-center p-6">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2">
+            {Object.entries(permissionsByRole).map(([role, permissions]) => (
+              <Card key={role} className="overflow-hidden">
+                <CardHeader className={role === 'admin' ? 'bg-primary/10' : 'bg-muted/50'}>
+                  <CardTitle className="capitalize">{role} Permissions</CardTitle>
+                  <CardDescription>
+                    {role === 'admin' ? 
+                      'Administrator privileges and capabilities' : 
+                      'Default permissions for regular users'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <ul className="divide-y">
+                    {permissions.map((permission) => (
+                      <li key={permission.id} className="flex items-center justify-between p-4">
+                        <span className="font-medium">{getActionDisplayName(permission.action)}</span>
                         <Switch
-                          checked={isPermissionAllowed('user', action)}
-                          onCheckedChange={() => handleTogglePermission('user', action)}
+                          checked={permission.allowed}
+                          onCheckedChange={(checked) => updatePermission(permission, checked)}
                         />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-            <div className="mt-6 text-sm text-muted-foreground">
-              <p>Note: Admin users always have all permissions enabled.</p>
-            </div>
-          </CardContent>
-        </Card>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );
