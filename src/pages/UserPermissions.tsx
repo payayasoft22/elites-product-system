@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
@@ -150,13 +149,13 @@ const UserPermissions = () => {
         
         const notifications = profiles.map(profile => ({
           type: 'permission_change',
-          content: {
+          content: JSON.stringify({
             action: permission.action,
             role: permission.role,
             allowed: allowed,
             changed_by: user?.email,
             changed_at: new Date().toISOString()
-          },
+          }),
           user_id: profile.id
         }));
         
@@ -213,12 +212,12 @@ const UserPermissions = () => {
       if (adminProfiles?.length) {
         const notifications = adminProfiles.map(admin => ({
           type: 'permission_request',
-          content: {
+          content: JSON.stringify({
             action: action,
             requested_by: user.email,
             requested_by_name: user.user_metadata?.full_name || 'A user',
             requested_at: new Date().toISOString()
-          },
+          }),
           user_id: admin.id
         }));
         
@@ -259,12 +258,13 @@ const UserPermissions = () => {
       if (updateError) throw updateError;
       
       // If approved, create a notification for the user
-      const notificationContent = {
+      const notificationContent = JSON.stringify({
+        request_id: requestId,
         action: request.action,
         status: status,
         resolved_by: user.email,
         resolved_at: new Date().toISOString()
-      };
+      });
       
       await supabase.from('notifications').insert({
         type: 'permission_request_resolved',
@@ -380,7 +380,7 @@ const UserPermissions = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <Alert variant="warning">
+                    <Alert>
                       <AlertTriangle className="h-4 w-4" />
                       <AlertTitle>Limited Access</AlertTitle>
                       <AlertDescription>

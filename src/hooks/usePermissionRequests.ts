@@ -97,11 +97,11 @@ export function usePermissionRequests() {
       if (admins && admins.length > 0) {
         const notifications = admins.map(admin => ({
           type: "permission_request",
-          content: {
+          content: JSON.stringify({
             action: action,
             requested_by: user.email,
             requested_at: new Date().toISOString()
-          },
+          }),
           user_id: admin.id
         }));
         
@@ -155,13 +155,13 @@ export function usePermissionRequests() {
         // Notify the user
         await supabase.from("notifications").insert({
           type: "permission_request_resolved",
-          content: {
+          content: JSON.stringify({
             request_id: requestId,
             action: request.action,
             status: "approved",
             resolved_by: user.email,
             resolved_at: new Date().toISOString()
-          },
+          }),
           user_id: request.user_id
         });
       }
@@ -213,13 +213,13 @@ export function usePermissionRequests() {
         // Notify the user
         await supabase.from("notifications").insert({
           type: "permission_request_resolved",
-          content: {
+          content: JSON.stringify({
             request_id: requestId,
             action: request.action,
             status: "rejected",
             resolved_by: user.email,
             resolved_at: new Date().toISOString()
-          },
+          }),
           user_id: request.user_id
         });
       }

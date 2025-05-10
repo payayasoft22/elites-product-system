@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Json } from '@/integrations/supabase/types';
 
 interface ActionLog {
   id: string;
@@ -68,8 +69,9 @@ const AdminActionLog = () => {
           const actionType = item.type || 'unknown';
           
           // Safely get values from content
-          const entityId = typeof content === 'object' ? 
-            (content.product_code || content.id || '') : '';
+          const contentObj = typeof content === 'object' && !Array.isArray(content) ? content : {};
+          const entityId = (contentObj as Record<string, any>).product_code || 
+                          (contentObj as Record<string, any>).id || '';
           
           // Determine if the action is revertible
           const canRevert = [
@@ -80,9 +82,10 @@ const AdminActionLog = () => {
           ].includes(actionType);
           
           // Safely get user information
-          const userEmail = item.profiles?.email || 'Unknown';
-          const userFirstName = item.profiles?.first_name || '';
-          const userName = item.profiles?.name || '';
+          const profile = item.profiles || {};
+          const userEmail = typeof profile === 'object' && profile !== null && 'email' in profile ? profile.email || 'Unknown' : 'Unknown';
+          const userFirstName = typeof profile === 'object' && profile !== null && 'first_name' in profile ? profile.first_name || '' : '';
+          const userName = typeof profile === 'object' && profile !== null && 'name' in profile ? profile.name || '' : '';
           const displayName = userFirstName || userName || 'Unknown User';
           
           return {
@@ -188,13 +191,13 @@ const AdminActionLog = () => {
       // Log this reversion as another action
       await supabase.from('notifications').insert({
         type: 'action_reverted',
-        content: {
+        content: JSON.stringify({
           reverted_action: action.action_type,
           reverted_id: action.id,
           original_changes: action.changes,
           reverted_by: user?.email,
           reverted_at: new Date().toISOString()
-        },
+        }),
         user_id: user?.id
       });
       
@@ -246,19 +249,19 @@ const AdminActionLog = () => {
     
     switch (action.action_type) {
       case 'product_added':
-        return `Added product ${changes.product_name || changes.product_code || 'unknown'}`;
+        return `Added product ${(changes as Record<string, any>).product_name || (changes as Record<string, any>).product_code || 'unknown'}`;
       case 'product_updated':
-        return `Updated product ${changes.product_name || changes.product_code || 'unknown'}`;
+        return `Updated product ${(changes as Record<string, any>).product_name || (changes as Record<string, any>).product_code || 'unknown'}`;
       case 'price_change':
-        return `Changed price of ${changes.product_name || changes.product_code || 'unknown'} to ${changes.new_price || 'unknown price'}`;
+        return `Changed price of ${(changes as Record<string, any>).product_name || (changes as Record<string, any>).product_code || 'unknown'} to ${(changes as Record<string, any>).new_price || 'unknown price'}`;
       case 'permission_change':
-        return `Changed permission "${changes.action}" for role "${changes.role}" to ${changes.allowed ? 'allowed' : 'denied'}`;
+        return `Changed permission "${(changes as Record<string, any>).action}" for role "${(changes as Record<string, any>).role}" to ${(changes as Record<string, any>).allowed ? 'allowed' : 'denied'}`;
       case 'permission_request':
-        return `Requested permission: ${changes.action}`;
+        return `Requested permission: ${(changes as Record<string, any>).action}`;
       case 'permission_request_resolved':
-        return `${changes.status === 'approved' ? 'Approved' : 'Rejected'} permission request: ${changes.action}`;
+        return `${(changes as Record<string, any>).status === 'approved' ? 'Approved' : 'Rejected'} permission request: ${(changes as Record<string, any>).action}`;
       case 'action_reverted':
-        return `Reverted action: ${changes.reverted_action}`;
+        return `Reverted action: ${(changes as Record<string, any>).reverted_action}`;
       default:
         return `${action.action_type.replace(/_/g, ' ')}`;
     }

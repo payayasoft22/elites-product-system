@@ -35,14 +35,18 @@ const UserNav = () => {
         .single();
       
       // Check if profile has an avatar_url property before trying to use it
-      if (profile && 'avatar_url' in profile && profile.avatar_url) {
-        const { data } = await supabase.storage
-          .from('avatars')
-          .download(profile.avatar_url as string);
-          
-        if (data) {
-          const url = URL.createObjectURL(data);
-          setAvatarUrl(url);
+      if (profile && profile.avatar_url) {
+        try {
+          const { data } = await supabase.storage
+            .from('avatars')
+            .download(profile.avatar_url as string);
+            
+          if (data) {
+            const url = URL.createObjectURL(data);
+            setAvatarUrl(url);
+          }
+        } catch (downloadError) {
+          console.error('Error downloading avatar:', downloadError);
         }
       }
     } catch (error) {

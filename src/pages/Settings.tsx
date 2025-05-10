@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -47,25 +48,28 @@ const Settings = () => {
         // Set form fields
         setFullName(profile.first_name || '');
         
-        // Check if company property exists on profile
-        if ('company' in profile) {
+        // Check for company and phone_number fields
+        if (profile.company !== undefined) {
           setCompanyName(profile.company as string || '');
         }
         
-        // Check if phone_number property exists on profile
-        if ('phone_number' in profile) {
+        if (profile.phone_number !== undefined) {
           setPhoneNumber(profile.phone_number as string || '');
         }
         
         // Fetch avatar if available
-        if ('avatar_url' in profile && profile.avatar_url) {
-          const { data } = await supabase.storage
-            .from('avatars')
-            .download(profile.avatar_url as string);
-            
-          if (data) {
-            const url = URL.createObjectURL(data);
-            setAvatarUrl(url);
+        if (profile.avatar_url) {
+          try {
+            const { data } = await supabase.storage
+              .from('avatars')
+              .download(profile.avatar_url as string);
+              
+            if (data) {
+              const url = URL.createObjectURL(data);
+              setAvatarUrl(url);
+            }
+          } catch (avatarError) {
+            console.error('Error downloading avatar:', avatarError);
           }
         }
       }
@@ -96,12 +100,14 @@ const Settings = () => {
       if (uploadError) throw uploadError;
       
       // Update user profile with the new avatar URL
+      const updates = {
+        avatar_url: fileName,
+        updated_at: new Date().toISOString()
+      };
+      
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ 
-          avatar_url: fileName,
-          updated_at: new Date().toISOString()
-        })
+        .update(updates)
         .eq('id', user?.id);
       
       if (updateError) throw updateError;
@@ -131,18 +137,18 @@ const Settings = () => {
     setSaving(true);
     
     try {
-      // Update profile data with type-safe update
-      const updateData: Record<string, any> = {
+      // Update profile data
+      const updates: Record<string, any> = {
         first_name: fullName
       };
       
-      // Only add these fields if they're expected in the profiles table
-      if (companyName) updateData.company = companyName;
-      if (phoneNumber) updateData.phone_number = phoneNumber;
+      // Only add these fields if they have values
+      if (companyName !== undefined) updates.company = companyName;
+      if (phoneNumber !== undefined) updates.phone_number = phoneNumber;
       
       const { error } = await supabase
         .from('profiles')
-        .update(updateData)
+        .update(updates)
         .eq('id', user?.id);
       
       if (error) throw error;
