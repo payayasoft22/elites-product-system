@@ -73,7 +73,7 @@ const UserPermissions = () => {
       const { error } = await supabase
         .from("role_permissions")
         .upsert(
-          [{ role, action, allowed }], 
+          { role, action, allowed },
           { onConflict: "role,action" }
         );
       

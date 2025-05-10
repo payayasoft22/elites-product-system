@@ -1,6 +1,6 @@
 
 import { useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, PermissionAction } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -40,39 +40,35 @@ const FirstUserSetup = () => {
             return;
           }
 
-          // Insert initial permissions for admin role
-          await Promise.all([
+          // Define the permission actions
+          const permissionActions: PermissionAction[] = [
             'add_product',
             'delete_product',
             'edit_product',
             'add_price_history',
             'delete_price_history',
             'edit_price_history'
-          ].map(action => (
-            supabase
-              .from('role_permissions')
-              .upsert(
-                [{ role: 'admin', action, allowed: true }],
-                { onConflict: 'role,action' }
-              )
-          )));
+          ];
 
-          // Set default permissions for regular users (can view but not modify)
-          await Promise.all([
-            'add_product',
-            'delete_product',
-            'edit_product',
-            'add_price_history',
-            'delete_price_history',
-            'edit_price_history'
-          ].map(action => (
-            supabase
+          // Insert initial permissions for admin role one by one
+          for (const action of permissionActions) {
+            await supabase
               .from('role_permissions')
               .upsert(
-                [{ role: 'user', action, allowed: false }],
+                { role: 'admin', action, allowed: true },
                 { onConflict: 'role,action' }
-              )
-          )));
+              );
+          }
+
+          // Set default permissions for regular users one by one
+          for (const action of permissionActions) {
+            await supabase
+              .from('role_permissions')
+              .upsert(
+                { role: 'user', action, allowed: false },
+                { onConflict: 'role,action' }
+              );
+          }
 
           toast({
             title: 'Admin Setup Complete',
