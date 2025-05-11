@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,6 @@ interface ProfileWithExtendedFields {
   name?: string;
   role?: string;
   avatar_url?: string;
-  company?: string;
   phone_number?: string;
   created_at?: string;
   last_sign_in_at?: string;
@@ -29,7 +29,6 @@ const Settings = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [fullName, setFullName] = useState("");
-  const [companyName, setCompanyName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -62,11 +61,7 @@ const Settings = () => {
         // Set form fields
         setFullName(typedProfile.first_name || '');
         
-        // Check for company and phone_number fields
-        if (typedProfile.company !== undefined) {
-          setCompanyName(typedProfile.company || '');
-        }
-        
+        // Check for phone_number field
         if (typedProfile.phone_number !== undefined) {
           setPhoneNumber(typedProfile.phone_number || '');
         }
@@ -155,7 +150,6 @@ const Settings = () => {
       const updates: ProfileWithExtendedFields = {
         id: user?.id || '',
         first_name: fullName,
-        company: companyName,
         phone_number: phoneNumber
       };
       
@@ -301,15 +295,6 @@ const Settings = () => {
                       placeholder="Enter your full name" 
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="company">Company Name</Label>
-                    <Input 
-                      id="company" 
-                      placeholder="Enter your company name" 
-                      value={companyName}
-                      onChange={(e) => setCompanyName(e.target.value)}
                     />
                   </div>
                   <div className="grid gap-2">

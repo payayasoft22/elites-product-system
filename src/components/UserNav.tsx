@@ -24,7 +24,6 @@ interface ProfileWithAvatar {
   avatar_url?: string;
   created_at?: string;
   last_sign_in_at?: string;
-  company?: string;
   phone_number?: string;
 }
 
