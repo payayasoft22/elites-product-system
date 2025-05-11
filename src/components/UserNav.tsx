@@ -31,30 +31,36 @@ const UserNav = () => {
   const { user, logout } = useAuth();
   const { isAdmin, userRole } = usePermission();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [profileData, setProfileData] = useState<ProfileWithAvatar | null>(null);
   
   useEffect(() => {
     if (user?.id) {
-      fetchProfileAvatar();
+      fetchProfileData();
     }
   }, [user]);
 
-  const fetchProfileAvatar = async () => {
+  const fetchProfileData = async () => {
     try {
-      const { data: profile } = await supabase
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user?.id)
         .single();
       
-      // Make sure we're using the typed profile data with avatar_url
-      const typedProfile = profile as ProfileWithAvatar;
+      if (error) {
+        console.error('Error fetching profile:', error);
+        return;
+      }
       
-      // Check if profile has an avatar_url property before trying to use it
-      if (typedProfile && typedProfile.avatar_url) {
+      // Set the profile data
+      setProfileData(profile);
+      
+      // If profile has an avatar_url property, fetch the avatar
+      if (profile && profile.avatar_url) {
         try {
           const { data } = await supabase.storage
             .from('avatars')
-            .download(typedProfile.avatar_url);
+            .download(profile.avatar_url);
             
           if (data) {
             const url = URL.createObjectURL(data);
@@ -65,29 +71,59 @@ const UserNav = () => {
         }
       }
     } catch (error) {
-      console.error('Error fetching avatar:', error);
+      console.error('Error fetching profile data:', error);
     }
   };
   
-  // Get user's initials for avatar
+  // Clean up object URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (avatarUrl) {
+        URL.revokeObjectURL(avatarUrl);
+      }
+    };
+  }, [avatarUrl]);
+  
+  // Get user's initials for avatar fallback
   const getUserInitials = () => {
-    if (!user?.user_metadata?.full_name) return "U";
-    return user.user_metadata.full_name
-      .split(" ")
-      .map((n: string) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
+    // Try to use profile data first
+    if (profileData?.first_name) {
+      return profileData.first_name.charAt(0).toUpperCase();
+    }
+    
+    // Fall back to user metadata
+    if (user?.user_metadata?.full_name) {
+      return user.user_metadata.full_name
+        .split(" ")
+        .map((n: string) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2);
+    }
+    
+    // Last resort: use email
+    if (user?.email) {
+      return user.email.charAt(0).toUpperCase();
+    }
+    
+    return "U";
+  };
+
+  const getDisplayName = () => {
+    if (profileData?.first_name) {
+      return profileData.first_name;
+    }
+    return user?.user_metadata?.full_name || user?.email || "User";
   };
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Avatar className="cursor-pointer">
+        <Avatar className="cursor-pointer border-2 border-white hover:border-primary transition-all">
           {avatarUrl ? (
             <AvatarImage src={avatarUrl} alt="Profile" />
           ) : (
-            <AvatarFallback className="bg-primary">
+            <AvatarFallback className="bg-primary text-primary-foreground">
               {getUserInitials()}
             </AvatarFallback>
           )}
@@ -97,19 +133,19 @@ const UserNav = () => {
         <DropdownMenuLabel>
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">
-              {user?.user_metadata?.full_name || user?.email}
+              {getDisplayName()}
             </p>
             <p className="text-xs leading-none text-muted-foreground">
               {user?.email}
             </p>
             <div className="flex items-center mt-1">
               {isAdmin ? (
-                <div className="flex items-center text-xs text-purple-700 bg-purple-100 rounded-full px-2 py-0.5">
+                <div className="flex items-center text-xs text-purple-700 bg-purple-100 dark:text-purple-400 dark:bg-purple-900/30 rounded-full px-2 py-0.5">
                   <Shield className="h-3 w-3 mr-1" />
                   Admin
                 </div>
               ) : (
-                <div className="flex items-center text-xs text-blue-700 bg-blue-100 rounded-full px-2 py-0.5">
+                <div className="flex items-center text-xs text-blue-700 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/30 rounded-full px-2 py-0.5">
                   <User className="h-3 w-3 mr-1" />
                   User
                 </div>
@@ -152,7 +188,7 @@ const UserNav = () => {
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          className="cursor-pointer"
+          className="cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400 hover:bg-red-100/50 dark:hover:bg-red-900/20"
           onClick={async () => {
             await logout();
           }}

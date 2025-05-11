@@ -5,9 +5,11 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { usePermission } from "@/hooks/usePermission";
 import AdminActionLog from "@/components/AdminActionLog";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { Loader2, DollarSign, Package, Users } from "lucide-react";
+import { Loader2, BarChart, ShoppingBag, Users, TrendingUp, Calendar } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
 
 interface Product {
   prodcode: string;
@@ -25,15 +27,12 @@ interface PriceHistory {
 
 const Dashboard = () => {
   const { isAdmin } = usePermission();
-  const [recentProducts, setRecentProducts] = useState<Product[]>([]);
-  const [recentPrices, setRecentPrices] = useState<PriceHistory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [totalProducts, setTotalProducts] = useState<number>(0);
-  const [totalUsers, setTotalUsers] = useState<number>(0);
 
-  useEffect(() => {
-    async function fetchDashboardData() {
-      setLoading(true);
+  // Use React Query for data fetching
+  const { data: dashboardData, isLoading } = useQuery({
+    queryKey: ["dashboardData"],
+    queryFn: async () => {
       try {
         // Fetch recent products
         const { data: products } = await supabase
@@ -42,8 +41,6 @@ const Dashboard = () => {
           .order('prodcode', { ascending: false })
           .limit(5);
           
-        if (products) setRecentProducts(products);
-        
         // Fetch recent price updates with product descriptions
         const { data: prices } = await supabase
           .from('pricehist')
@@ -56,34 +53,45 @@ const Dashboard = () => {
           .order('effdate', { ascending: false })
           .limit(5);
           
-        if (prices) setRecentPrices(prices);
-        
         // Get total product count
         const { count: productCount } = await supabase
           .from('product')
           .select('*', { count: 'exact', head: true });
-        
-        if (productCount !== null) setTotalProducts(productCount);
         
         // Get total user count
         const { count: userCount } = await supabase
           .from('profiles')
           .select('*', { count: 'exact', head: true });
         
-        if (userCount !== null) setTotalUsers(userCount);
+        // Get price change count for the last 30 days
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        const { count: recentPriceChanges } = await supabase
+          .from('pricehist')
+          .select('*', { count: 'exact', head: true })
+          .gte('effdate', thirtyDaysAgo.toISOString());
+        
+        return {
+          products: products || [],
+          prices: prices || [],
+          totalProducts: productCount || 0,
+          totalUsers: userCount || 0,
+          recentPriceChanges: recentPriceChanges || 0
+        };
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
-      } finally {
-        setLoading(false);
+        throw error;
       }
     }
-    
-    fetchDashboardData();
-  }, []);
+  });
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString();
+    try {
+      return format(new Date(dateString), 'MMM d, yyyy');
+    } catch (error) {
+      return "Invalid date";
+    }
   };
 
   return (
@@ -93,132 +101,169 @@ const Dashboard = () => {
       </Helmet>
       
       <div className="space-y-6">
-        <div className="flex flex-col gap-2">
-          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-          <p className="text-muted-foreground">
-            Welcome to the Elites Product Management System
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+            <p className="text-muted-foreground mt-1">
+              Welcome to the Elites Product Management System
+            </p>
+          </div>
+          
+          <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground">
+            <Calendar className="h-4 w-4" />
+            <span>{format(new Date(), 'PPP')}</span>
+          </div>
         </div>
         
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Products
-              </CardTitle>
+        {/* Stats Cards */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <Card className="transition-all hover:shadow-md">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-sm font-medium">Total Products</CardTitle>
+              <ShoppingBag className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="flex items-center space-x-2">
-                <Package className="h-4 w-4 text-muted-foreground" />
-                <span className="text-2xl font-bold">{totalProducts}</span>
-              </div>
+              {isLoading ? (
+                <div className="h-6 w-16 bg-muted animate-pulse rounded"></div>
+              ) : (
+                <div className="text-2xl font-bold">{dashboardData?.totalProducts}</div>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                Products in the catalog
+              </p>
             </CardContent>
           </Card>
           
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Users
-              </CardTitle>
+          <Card className="transition-all hover:shadow-md">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="flex items-center space-x-2">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                <span className="text-2xl font-bold">{totalUsers}</span>
-              </div>
+              {isLoading ? (
+                <div className="h-6 w-16 bg-muted animate-pulse rounded"></div>
+              ) : (
+                <div className="text-2xl font-bold">{dashboardData?.totalUsers}</div>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                Active system users
+              </p>
             </CardContent>
           </Card>
           
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">
-                Latest Updates
-              </CardTitle>
+          <Card className="transition-all hover:shadow-md">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-sm font-medium">Recent Updates</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="flex items-center space-x-2">
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-                <span className="text-2xl font-bold">{recentPrices.length}</span>
-              </div>
+              {isLoading ? (
+                <div className="h-6 w-16 bg-muted animate-pulse rounded"></div>
+              ) : (
+                <div className="text-2xl font-bold">{dashboardData?.recentPriceChanges}</div>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                Price updates in last 30 days
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card className="transition-all hover:shadow-md bg-gradient-to-br from-blue-50 to-slate-50 dark:from-blue-950/20 dark:to-slate-950/40 border-blue-100 dark:border-blue-900">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-sm font-medium">Performance</CardTitle>
+              <BarChart className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">Optimal</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                System running smoothly
+              </p>
             </CardContent>
           </Card>
         </div>
         
+        {/* Data Tables */}
         <div className="grid gap-6 md:grid-cols-2">
-          <Card>
+          <Card className="transition-all hover:shadow-md">
             <CardHeader>
-              <CardTitle>Recent Price Updates</CardTitle>
+              <CardTitle className="text-lg">Recent Price Updates</CardTitle>
+              <CardDescription>Latest price changes in the system</CardDescription>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {isLoading ? (
                 <div className="flex justify-center py-4">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Product</TableHead>
-                      <TableHead>Price</TableHead>
-                      <TableHead>Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {recentPrices.map((price, index) => (
-                      <TableRow key={`${price.prodcode}-${index}`}>
-                        <TableCell>
-                          {price.product?.description || price.prodcode}
-                        </TableCell>
-                        <TableCell>${parseFloat(price.unitprice.toString()).toFixed(2)}</TableCell>
-                        <TableCell>{formatDate(price.effdate)}</TableCell>
-                      </TableRow>
-                    ))}
-                    {recentPrices.length === 0 && (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={3} className="text-center py-4 text-muted-foreground">
-                          No recent price updates
-                        </TableCell>
+                        <TableHead>Product</TableHead>
+                        <TableHead>Price</TableHead>
+                        <TableHead>Date</TableHead>
                       </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {dashboardData?.prices.map((price: any, index: number) => (
+                        <TableRow key={`${price.prodcode}-${index}`} className="hover:bg-muted/50">
+                          <TableCell className="font-medium">
+                            {price.product?.description || price.prodcode}
+                          </TableCell>
+                          <TableCell>${parseFloat(price.unitprice.toString()).toFixed(2)}</TableCell>
+                          <TableCell>{formatDate(price.effdate)}</TableCell>
+                        </TableRow>
+                      ))}
+                      {(dashboardData?.prices.length === 0) && (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center py-4 text-muted-foreground">
+                            No recent price updates
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
           
-          <Card>
+          <Card className="transition-all hover:shadow-md">
             <CardHeader>
-              <CardTitle>Recent Products</CardTitle>
+              <CardTitle className="text-lg">Recent Products</CardTitle>
+              <CardDescription>Latest products added to the catalog</CardDescription>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {isLoading ? (
                 <div className="flex justify-center py-4">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Code</TableHead>
-                      <TableHead>Description</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {recentProducts.map((product) => (
-                      <TableRow key={product.prodcode}>
-                        <TableCell>{product.prodcode}</TableCell>
-                        <TableCell>{product.description}</TableCell>
-                      </TableRow>
-                    ))}
-                    {recentProducts.length === 0 && (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={2} className="text-center py-4 text-muted-foreground">
-                          No recent products
-                        </TableCell>
+                        <TableHead>Code</TableHead>
+                        <TableHead>Description</TableHead>
                       </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {dashboardData?.products.map((product: any) => (
+                        <TableRow key={product.prodcode} className="hover:bg-muted/50">
+                          <TableCell className="font-medium">{product.prodcode}</TableCell>
+                          <TableCell>{product.description}</TableCell>
+                        </TableRow>
+                      ))}
+                      {(dashboardData?.products.length === 0) && (
+                        <TableRow>
+                          <TableCell colSpan={2} className="text-center py-4 text-muted-foreground">
+                            No recent products
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -226,8 +271,16 @@ const Dashboard = () => {
         
         {/* Admin-only action log section */}
         {isAdmin && (
-          <div className="mt-8">
-            <AdminActionLog />
+          <div className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Admin Action Log</CardTitle>
+                <CardDescription>Recent administrative actions in the system</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AdminActionLog />
+              </CardContent>
+            </Card>
           </div>
         )}
       </div>
