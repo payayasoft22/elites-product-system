@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -12,6 +11,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Camera, Loader2 } from "lucide-react";
 import { v4 as uuidv4 } from 'uuid';
+
+interface ProfileWithExtendedFields {
+  id: string;
+  first_name?: string;
+  email?: string;
+  name?: string;
+  role?: string;
+  avatar_url?: string;
+  company?: string;
+  phone_number?: string;
+  created_at?: string;
+  last_sign_in_at?: string;
+}
 
 const Settings = () => {
   const { user } = useAuth();
@@ -45,24 +57,26 @@ const Settings = () => {
       if (error) throw error;
       
       if (profile) {
+        const typedProfile = profile as ProfileWithExtendedFields;
+        
         // Set form fields
-        setFullName(profile.first_name || '');
+        setFullName(typedProfile.first_name || '');
         
         // Check for company and phone_number fields
-        if (profile.company !== undefined) {
-          setCompanyName(profile.company as string || '');
+        if (typedProfile.company !== undefined) {
+          setCompanyName(typedProfile.company || '');
         }
         
-        if (profile.phone_number !== undefined) {
-          setPhoneNumber(profile.phone_number as string || '');
+        if (typedProfile.phone_number !== undefined) {
+          setPhoneNumber(typedProfile.phone_number || '');
         }
         
         // Fetch avatar if available
-        if (profile.avatar_url) {
+        if (typedProfile.avatar_url) {
           try {
             const { data } = await supabase.storage
               .from('avatars')
-              .download(profile.avatar_url as string);
+              .download(typedProfile.avatar_url);
               
             if (data) {
               const url = URL.createObjectURL(data);
@@ -102,7 +116,6 @@ const Settings = () => {
       // Update user profile with the new avatar URL
       const updates = {
         avatar_url: fileName,
-        updated_at: new Date().toISOString()
       };
       
       const { error: updateError } = await supabase
@@ -139,12 +152,10 @@ const Settings = () => {
     try {
       // Update profile data
       const updates: Record<string, any> = {
-        first_name: fullName
+        first_name: fullName,
+        company: companyName,
+        phone_number: phoneNumber
       };
-      
-      // Only add these fields if they have values
-      if (companyName !== undefined) updates.company = companyName;
-      if (phoneNumber !== undefined) updates.phone_number = phoneNumber;
       
       const { error } = await supabase
         .from('profiles')

@@ -1,4 +1,3 @@
-
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -14,6 +13,17 @@ import { Link } from "react-router-dom";
 import { Shield, User, LogOut, Settings, Package, LayoutDashboard, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
+
+interface ProfileWithAvatar {
+  id: string;
+  first_name?: string;
+  email?: string;
+  name?: string;
+  role?: string;
+  avatar_url?: string;
+  created_at?: string;
+  last_sign_in_at?: string;
+}
 
 const UserNav = () => {
   const { user, logout } = useAuth();
@@ -39,7 +49,7 @@ const UserNav = () => {
         try {
           const { data } = await supabase.storage
             .from('avatars')
-            .download(profile.avatar_url as string);
+            .download(profile.avatar_url);
             
           if (data) {
             const url = URL.createObjectURL(data);

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,7 +16,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Json } from '@/integrations/supabase/types';
 
 interface ActionLog {
   id: string;
@@ -83,9 +81,9 @@ const AdminActionLog = () => {
           
           // Safely get user information
           const profile = item.profiles || {};
-          const userEmail = typeof profile === 'object' && profile !== null && 'email' in profile ? profile.email || 'Unknown' : 'Unknown';
-          const userFirstName = typeof profile === 'object' && profile !== null && 'first_name' in profile ? profile.first_name || '' : '';
-          const userName = typeof profile === 'object' && profile !== null && 'name' in profile ? profile.name || '' : '';
+          const userEmail = typeof profile === 'object' && profile !== null && 'email' in profile ? profile.email as string || 'Unknown' : 'Unknown';
+          const userFirstName = typeof profile === 'object' && profile !== null && 'first_name' in profile ? profile.first_name as string || '' : '';
+          const userName = typeof profile === 'object' && profile !== null && 'name' in profile ? profile.name as string || '' : '';
           const displayName = userFirstName || userName || 'Unknown User';
           
           return {
