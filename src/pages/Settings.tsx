@@ -114,7 +114,8 @@ const Settings = () => {
       if (uploadError) throw uploadError;
       
       // Update user profile with the new avatar URL
-      const updates = {
+      const updates: ProfileWithExtendedFields = {
+        id: user?.id || '',
         avatar_url: fileName,
       };
       
@@ -151,7 +152,8 @@ const Settings = () => {
     
     try {
       // Update profile data
-      const updates: Record<string, any> = {
+      const updates: ProfileWithExtendedFields = {
+        id: user?.id || '',
         first_name: fullName,
         company: companyName,
         phone_number: phoneNumber

@@ -1,3 +1,4 @@
+
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -23,6 +24,8 @@ interface ProfileWithAvatar {
   avatar_url?: string;
   created_at?: string;
   last_sign_in_at?: string;
+  company?: string;
+  phone_number?: string;
 }
 
 const UserNav = () => {
@@ -44,12 +47,15 @@ const UserNav = () => {
         .eq('id', user?.id)
         .single();
       
+      // Make sure we're using the typed profile data with avatar_url
+      const typedProfile = profile as ProfileWithAvatar;
+      
       // Check if profile has an avatar_url property before trying to use it
-      if (profile && profile.avatar_url) {
+      if (typedProfile && typedProfile.avatar_url) {
         try {
           const { data } = await supabase.storage
             .from('avatars')
-            .download(profile.avatar_url);
+            .download(typedProfile.avatar_url);
             
           if (data) {
             const url = URL.createObjectURL(data);
