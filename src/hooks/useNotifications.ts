@@ -36,6 +36,7 @@ export function useNotifications() {
     },
     enabled: !!user,
     refetchOnWindowFocus: true,
+    staleTime: 30000, // Consider data fresh for 30 seconds
   });
 
   const unreadCount = notifications?.filter(n => !n.is_read).length || 0;
@@ -47,7 +48,10 @@ export function useNotifications() {
         .update({ is_read: true })
         .eq("id", id);
       
-      if (error) throw error;
+      if (error) {
+        console.error("Error marking notification as read:", error);
+        throw error;
+      }
       return id;
     },
     onSuccess: () => {
@@ -65,7 +69,28 @@ export function useNotifications() {
         .eq("user_id", user.id)
         .eq("is_read", false);
       
-      if (error) throw error;
+      if (error) {
+        console.error("Error marking all notifications as read:", error);
+        throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications", user?.id] });
+    },
+  });
+
+  const deleteNotification = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("notifications")
+        .delete()
+        .eq("id", id);
+      
+      if (error) {
+        console.error("Error deleting notification:", error);
+        throw error;
+      }
+      return id;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications", user?.id] });
@@ -80,5 +105,6 @@ export function useNotifications() {
     refetch,
     markAsRead,
     markAllAsRead,
+    deleteNotification,
   };
 }

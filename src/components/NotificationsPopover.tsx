@@ -8,13 +8,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bell } from "lucide-react";
-import { format } from "date-fns";
+import { Bell, BellRing, Trash2 } from "lucide-react";
+import { format, formatDistance } from "date-fns";
 import { useNotifications } from "@/hooks/useNotifications";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const NotificationsPopover = () => {
-  const { notifications, unreadCount, markAllAsRead, markAsRead } = useNotifications();
+  const { notifications, unreadCount, markAllAsRead, markAsRead, deleteNotification } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
 
   const handleMarkAllAsRead = () => {
@@ -23,6 +24,11 @@ const NotificationsPopover = () => {
 
   const handleMarkAsRead = (id: string) => {
     markAsRead.mutate(id);
+  };
+
+  const handleDeleteNotification = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    deleteNotification.mutate(id);
   };
 
   // Format the notification content based on type
@@ -42,7 +48,7 @@ const NotificationsPopover = () => {
               New price: ${content.new_price}
             </p>
             <p className="text-xs text-gray-400">
-              Changed by {content.changed_by}
+              Changed by {content.changed_by || 'a user'} • {formatDistance(new Date(content.changed_at || notification.created_at), new Date(), { addSuffix: true })}
             </p>
           </div>
         );
@@ -52,8 +58,36 @@ const NotificationsPopover = () => {
             <p className="font-medium">
               New product added: {content.product_name}
             </p>
+            <p className="text-muted-foreground text-sm">
+              Product code: {content.product_code}
+            </p>
             <p className="text-xs text-gray-400">
-              Added by {content.added_by}
+              Added by {content.added_by || 'a user'} • {formatDistance(new Date(content.added_at || notification.created_at), new Date(), { addSuffix: true })}
+            </p>
+          </div>
+        );
+      case 'product_deleted':
+        return (
+          <div>
+            <p className="font-medium">
+              Product deleted: {content.product_name}
+            </p>
+            <p className="text-xs text-gray-400">
+              Deleted by {content.deleted_by || 'a user'} • {formatDistance(new Date(content.deleted_at || notification.created_at), new Date(), { addSuffix: true })}
+            </p>
+          </div>
+        );
+      case 'product_updated':
+        return (
+          <div>
+            <p className="font-medium">
+              Product updated: {content.product_name}
+            </p>
+            <p className="text-muted-foreground text-sm">
+              {content.fields_updated ? `Fields updated: ${content.fields_updated}` : 'Details were modified'}
+            </p>
+            <p className="text-xs text-gray-400">
+              Updated by {content.updated_by || 'a user'} • {formatDistance(new Date(content.updated_at || notification.created_at), new Date(), { addSuffix: true })}
             </p>
           </div>
         );
@@ -71,7 +105,8 @@ const NotificationsPopover = () => {
       default:
         return (
           <div>
-            <p>{JSON.stringify(content)}</p>
+            <p className="font-medium">Notification</p>
+            <p className="text-sm">{JSON.stringify(content)}</p>
           </div>
         );
     }
@@ -81,9 +116,13 @@ const NotificationsPopover = () => {
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
+          {unreadCount > 0 ? (
+            <BellRing className="h-5 w-5 text-primary" />
+          ) : (
+            <Bell className="h-5 w-5" />
+          )}
           {unreadCount > 0 && (
-            <Badge variant="destructive" className="absolute -top-1 -right-1 px-1.5 h-5 min-w-5 flex items-center justify-center">
+            <Badge variant="destructive" className="absolute -top-1 -right-1 px-1.5 h-5 min-w-[20px] flex items-center justify-center">
               {unreadCount}
             </Badge>
           )}
@@ -104,32 +143,41 @@ const NotificationsPopover = () => {
               </TabsTrigger>
             </TabsList>
             {unreadCount > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleMarkAllAsRead}
-                disabled={markAllAsRead.isPending}
-                className="text-xs"
-              >
-                Mark all as read
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleMarkAllAsRead}
+                      disabled={markAllAsRead.isPending}
+                      className="text-xs"
+                    >
+                      Mark all as read
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Mark all notifications as read</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </div>
 
           <TabsContent value="all" className="p-0">
             <ScrollArea className="h-[300px]">
-              {notifications?.length === 0 ? (
-                <div className="flex items-center justify-center h-full p-4 text-center">
+              {!notifications || notifications.length === 0 ? (
+                <div className="flex items-center justify-center h-[300px] p-4 text-center">
                   <div>
                     <p className="text-muted-foreground">No notifications</p>
                   </div>
                 </div>
               ) : (
-                notifications?.map((notification) => (
+                notifications.map((notification) => (
                   <div
                     key={notification.id}
-                    className={`border-b last:border-b-0 p-4 ${
-                      !notification.is_read ? "bg-primary-50" : ""
+                    className={`border-b last:border-b-0 p-4 relative hover:bg-muted/30 transition-colors ${
+                      !notification.is_read ? "bg-primary/5" : ""
                     }`}
                     onClick={() => {
                       if (!notification.is_read) {
@@ -138,10 +186,23 @@ const NotificationsPopover = () => {
                     }}
                   >
                     {formatContent(notification)}
-                    <p className="text-xs text-muted-foreground mt-2">
-                      {notification.created_at &&
-                        format(new Date(notification.created_at), "MMM d, h:mm a")}
-                    </p>
+                    <div className="flex justify-between items-center mt-2">
+                      <p className="text-xs text-muted-foreground">
+                        {notification.created_at &&
+                          format(new Date(notification.created_at), "MMM d, h:mm a")}
+                      </p>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-6 w-6 opacity-50 hover:opacity-100"
+                        onClick={(e) => handleDeleteNotification(e, notification.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    {!notification.is_read && (
+                      <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-primary" />
+                    )}
                   </div>
                 ))
               )}
@@ -150,26 +211,37 @@ const NotificationsPopover = () => {
 
           <TabsContent value="unread" className="p-0">
             <ScrollArea className="h-[300px]">
-              {notifications?.filter((n) => !n.is_read).length === 0 ? (
-                <div className="flex items-center justify-center h-full p-4 text-center">
+              {!notifications || notifications.filter((n) => !n.is_read).length === 0 ? (
+                <div className="flex items-center justify-center h-[300px] p-4 text-center">
                   <div>
                     <p className="text-muted-foreground">No unread notifications</p>
                   </div>
                 </div>
               ) : (
                 notifications
-                  ?.filter((n) => !n.is_read)
+                  .filter((n) => !n.is_read)
                   .map((notification) => (
                     <div
                       key={notification.id}
-                      className="border-b last:border-b-0 p-4 bg-primary-50"
+                      className="border-b last:border-b-0 p-4 bg-primary/5 relative hover:bg-muted/30 transition-colors"
                       onClick={() => handleMarkAsRead(notification.id)}
                     >
                       {formatContent(notification)}
-                      <p className="text-xs text-muted-foreground mt-2">
-                        {notification.created_at &&
-                          format(new Date(notification.created_at), "MMM d, h:mm a")}
-                      </p>
+                      <div className="flex justify-between items-center mt-2">
+                        <p className="text-xs text-muted-foreground">
+                          {notification.created_at &&
+                            format(new Date(notification.created_at), "MMM d, h:mm a")}
+                        </p>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-6 w-6 opacity-50 hover:opacity-100"
+                          onClick={(e) => handleDeleteNotification(e, notification.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-primary" />
                     </div>
                   ))
               )}
