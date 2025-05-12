@@ -17,10 +17,14 @@ import PriceHistorySheet from "@/components/products/PriceHistorySheet";
 import PriceForm, { priceHistorySchema } from "@/components/products/PriceForm";
 import DeleteConfirmDialog from "@/components/products/DeleteConfirmDialog";
 import { Product, PriceHistory } from "@/components/products/types";
+import { usePermission } from "@/hooks/usePermission";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 const Products = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { can, isAdmin, isLoading: permissionsLoading } = usePermission();
   
   // State variables
   const [products, setProducts] = useState<Product[]>([]);
@@ -41,8 +45,25 @@ const Products = () => {
   const [tempProduct, setTempProduct] = useState<Product | null>(null);
   const itemsPerPage = 10;
 
+  // Permission based state
+  const canAddProduct = isAdmin || can("add_product");
+  const canEditProduct = isAdmin || can("edit_product");
+  const canDeleteProduct = isAdmin || can("delete_product");
+  const canAddPriceHistory = isAdmin || can("add_price_history");
+  const canEditPriceHistory = isAdmin || can("edit_price_history");
+  const canDeletePriceHistory = isAdmin || can("delete_price_history");
+
   // Event handlers
   const handleAddProduct = () => {
+    if (!canAddProduct) {
+      toast({
+        title: "Permission Denied",
+        description: "You don't have permission to add products.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     const tempProd: Product = {
       prodcode: "",
       description: "",
@@ -54,11 +75,29 @@ const Products = () => {
   };
 
   const handleEditProduct = (product: Product) => {
+    if (!canEditProduct) {
+      toast({
+        title: "Permission Denied",
+        description: "You don't have permission to edit products.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setSelectedProduct(product);
     setIsEditProductOpen(true);
   };
 
   const handleDeleteProduct = (product: Product) => {
+    if (!canDeleteProduct) {
+      toast({
+        title: "Permission Denied",
+        description: "You don't have permission to delete products.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setSelectedProduct(product);
     setIsDeleteConfirmOpen(true);
   };
@@ -74,21 +113,57 @@ const Products = () => {
   };
 
   const handleAddPrice = () => {
+    if (!canAddPriceHistory) {
+      toast({
+        title: "Permission Denied",
+        description: "You don't have permission to add price history.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setIsAddPriceOpen(true);
   };
 
   const handleEditPrice = (price: PriceHistory) => {
+    if (!canEditPriceHistory) {
+      toast({
+        title: "Permission Denied",
+        description: "You don't have permission to edit price history.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setSelectedPrice(price);
     setIsEditPriceOpen(true);
   };
 
   const handleDeletePrice = (price: PriceHistory) => {
+    if (!canDeletePriceHistory) {
+      toast({
+        title: "Permission Denied",
+        description: "You don't have permission to delete price history.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setSelectedPrice(price);
     setIsDeletePriceOpen(true);
   };
 
   // CRUD operations
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    if (!canAddProduct) {
+      toast({
+        title: "Permission Denied",
+        description: "You don't have permission to add products.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     try {
       const { error: productError } = await supabase
         .from('product')
@@ -132,7 +207,14 @@ const Products = () => {
   };
 
   const onEdit = async (values: z.infer<typeof formSchema>) => {
-    if (!selectedProduct) return;
+    if (!canEditProduct || !selectedProduct) {
+      toast({
+        title: "Permission Denied",
+        description: "You don't have permission to edit products.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
       const { error: productError } = await supabase
@@ -146,15 +228,23 @@ const Products = () => {
       if (productError) throw productError;
 
       if (values.unitprice !== selectedProduct.currentPrice) {
-        const { error: priceError } = await supabase
-          .from('pricehist')
-          .insert({
-            prodcode: selectedProduct.prodcode,
-            unitprice: values.unitprice,
-            effdate: new Date().toISOString().split('T')[0]
+        if (!canAddPriceHistory) {
+          toast({
+            title: "Warning",
+            description: "Product details updated, but you don't have permission to update the price.",
+            variant: "warning",
           });
+        } else {
+          const { error: priceError } = await supabase
+            .from('pricehist')
+            .insert({
+              prodcode: selectedProduct.prodcode,
+              unitprice: values.unitprice,
+              effdate: new Date().toISOString().split('T')[0]
+            });
 
-        if (priceError) throw priceError;
+          if (priceError) throw priceError;
+        }
       }
 
       toast({
@@ -177,7 +267,14 @@ const Products = () => {
   };
 
   const onDelete = async () => {
-    if (!selectedProduct) return;
+    if (!canDeleteProduct || !selectedProduct) {
+      toast({
+        title: "Permission Denied",
+        description: "You don't have permission to delete products.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
       const { error: priceHistError } = await supabase
@@ -286,7 +383,14 @@ const Products = () => {
   };
 
   const onSubmitPrice = async (values: z.infer<typeof priceHistorySchema>) => {
-    if (!tempProduct) return;
+    if (!canAddPriceHistory || !tempProduct) {
+      toast({
+        title: "Permission Denied",
+        description: "You don't have permission to add price history.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
       const { error } = await supabase
@@ -323,7 +427,14 @@ const Products = () => {
   };
 
   const onEditPrice = async (values: z.infer<typeof priceHistorySchema>) => {
-    if (!selectedPrice || !tempProduct) return;
+    if (!canEditPriceHistory || !selectedPrice || !tempProduct) {
+      toast({
+        title: "Permission Denied",
+        description: "You don't have permission to edit price history.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
       const { error } = await supabase
@@ -364,7 +475,14 @@ const Products = () => {
   };
 
   const onDeletePrice = async () => {
-    if (!selectedPrice || !tempProduct) return;
+    if (!canDeletePriceHistory || !selectedPrice || !tempProduct) {
+      toast({
+        title: "Permission Denied",
+        description: "You don't have permission to delete price history.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
       const { error } = await supabase
@@ -420,10 +538,24 @@ const Products = () => {
             <h2 className="text-3xl font-bold tracking-tight">Products</h2>
             <p className="text-muted-foreground">Manage your product catalog and pricing history.</p>
           </div>
-          <Button onClick={handleAddProduct} className="gap-1">
+          <Button 
+            onClick={handleAddProduct} 
+            className="gap-1"
+            disabled={!canAddProduct}
+          >
             <Plus className="h-4 w-4" /> Add Product
           </Button>
         </div>
+
+        {!permissionsLoading && !isAdmin && !canAddProduct && !canEditProduct && !canDeleteProduct && (
+          <Alert variant="warning" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Limited Access</AlertTitle>
+            <AlertDescription>
+              You currently don't have permissions to manage products. Please contact an administrator to request access.
+            </AlertDescription>
+          </Alert>
+        )}
 
         <Card className="p-6">
           <ProductList 
@@ -438,6 +570,9 @@ const Products = () => {
             handleAddProduct={handleAddProduct}
             handleEditProduct={handleEditProduct}
             handleDeleteProduct={handleDeleteProduct}
+            canAddProduct={canAddProduct}
+            canEditProduct={canEditProduct}
+            canDeleteProduct={canDeleteProduct}
           />
         </Card>
       </div>
@@ -504,6 +639,9 @@ const Products = () => {
         onAddPrice={handleAddPrice}
         onEditPrice={handleEditPrice}
         onDeletePrice={handleDeletePrice}
+        canAddPriceHistory={canAddPriceHistory}
+        canEditPriceHistory={canEditPriceHistory}
+        canDeletePriceHistory={canDeletePriceHistory}
       />
 
       {/* Add Price Dialog */}

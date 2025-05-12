@@ -1,23 +1,10 @@
 
 import React from "react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { Clock, Plus, Edit, Trash } from "lucide-react";
-
-interface PriceHistory {
-  id?: number;
-  prodcode: string;
-  unitprice: number;
-  effdate: string;
-}
-
-interface Product {
-  prodcode: string;
-  description: string | null;
-  unit: string | null;
-  currentPrice: number | null;
-}
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Product, PriceHistory } from "@/components/products/types";
 
 interface PriceHistorySheetProps {
   isOpen: boolean;
@@ -27,6 +14,9 @@ interface PriceHistorySheetProps {
   onAddPrice: () => void;
   onEditPrice: (price: PriceHistory) => void;
   onDeletePrice: (price: PriceHistory) => void;
+  canAddPriceHistory?: boolean;
+  canEditPriceHistory?: boolean;
+  canDeletePriceHistory?: boolean;
 }
 
 const PriceHistorySheet = ({
@@ -36,92 +26,119 @@ const PriceHistorySheet = ({
   priceHistory,
   onAddPrice,
   onEditPrice,
-  onDeletePrice
+  onDeletePrice,
+  canAddPriceHistory = true,
+  canEditPriceHistory = true,
+  canDeletePriceHistory = true
 }: PriceHistorySheetProps) => {
+  const formatPrice = (price: number): string => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(price);
+  };
+
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
-      <SheetContent className="overflow-y-auto">
+      <SheetContent className="sm:max-w-[600px]">
         <SheetHeader>
-          <SheetTitle>Price History for {tempProduct?.prodcode}</SheetTitle>
+          <SheetTitle>Price History</SheetTitle>
           <SheetDescription>
-            Manage the price history for this product. The most recent price will be used as the current price.
+            {tempProduct ? `Price history for ${tempProduct.prodcode} - ${tempProduct.description || ''}` : 'Loading...'}
           </SheetDescription>
         </SheetHeader>
-        
-        <div className="py-6">
-          <div className="flex justify-end mb-4">
-            <Button onClick={onAddPrice} className="gap-1">
-              <Plus className="h-4 w-4" /> Add Price History
-            </Button>
-          </div>
-          
+
+        <div className="py-4 space-y-4">
+          {canAddPriceHistory && (
+            <div className="flex justify-end">
+              <Button 
+                variant="outline" 
+                className="gap-1"
+                onClick={onAddPrice}
+              >
+                <Plus className="h-4 w-4" /> Add Price
+              </Button>
+            </div>
+          )}
+
           {priceHistory.length === 0 ? (
-            <div className="text-center py-8">
-              <Clock className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-              <p className="text-muted-foreground">No price history found</p>
-              <p className="text-sm text-muted-foreground">Add a new price entry to start tracking price changes.</p>
+            <div className="flex flex-col items-center justify-center text-center p-8">
+              <div className="rounded-full bg-muted p-3 mb-4">
+                <Clock className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">No price history</h3>
+              <p className="text-muted-foreground max-w-sm mb-6">
+                {tempProduct?.prodcode ? `${tempProduct.prodcode} doesn't have any price history records yet.` : 'No product selected.'}
+              </p>
+              {tempProduct?.prodcode && canAddPriceHistory && (
+                <Button size="sm" onClick={onAddPrice}>
+                  <Plus className="h-4 w-4 mr-1" /> Add First Price
+                </Button>
+              )}
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {priceHistory.map((price, index) => (
-                  <TableRow key={`${price.prodcode}-${price.effdate}`}>
-                    <TableCell>{new Date(price.effdate).toLocaleDateString()}</TableCell>
-                    <TableCell>
-                      {new Intl.NumberFormat('en-US', {
-                        style: 'currency',
-                        currency: 'USD'
-                      }).format(price.unitprice)}
-                      {index === 0 && (
-                        <span className="ml-2 inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                          Current
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex space-x-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          className="flex items-center gap-1"
-                          onClick={() => onEditPrice(price)}
-                        >
-                          <Edit className="h-3.5 w-3.5" />
-                          <span>Edit</span>
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          className="flex items-center gap-1 text-destructive hover:text-destructive"
-                          onClick={() => onDeletePrice(price)}
-                        >
-                          <Trash className="h-3.5 w-3.5" />
-                          <span>Delete</span>
-                        </Button>
-                      </div>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Effective Date</TableHead>
+                    <TableHead>Unit Price</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {priceHistory.map((price, index) => (
+                    <TableRow key={`${price.prodcode}-${price.effdate}`}>
+                      <TableCell>
+                        {new Date(price.effdate).toLocaleDateString()}
+                        {index === 0 && (
+                          <span className="ml-2 inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+                            Current
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>{formatPrice(price.unitprice)}</TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          {canEditPriceHistory && (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={() => onEditPrice(price)}
+                            >
+                              <Edit className="h-4 w-4" />
+                              <span className="sr-only">Edit</span>
+                            </Button>
+                          )}
+                          {canDeletePriceHistory && priceHistory.length > 1 && (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                              onClick={() => onDeletePrice(price)}
+                            >
+                              <Trash className="h-4 w-4" />
+                              <span className="sr-only">Delete</span>
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </div>
-        
-        <SheetFooter>
-          <Button 
-            variant="outline" 
-            onClick={() => onOpenChange(false)}
-          >
-            Done
-          </Button>
-        </SheetFooter>
+
+        <div className="mt-4">
+          <SheetClose asChild>
+            <Button variant="outline" className="w-full">Close</Button>
+          </SheetClose>
+        </div>
       </SheetContent>
     </Sheet>
   );

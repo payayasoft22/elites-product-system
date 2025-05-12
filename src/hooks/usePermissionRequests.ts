@@ -8,7 +8,7 @@ import { PermissionAction } from "@/integrations/supabase/client";
 export interface PermissionRequest {
   id: string;
   user_id: string;
-  action?: PermissionAction;
+  action: PermissionAction;
   status: "pending" | "approved" | "rejected";
   requested_at?: string;
   resolved_at?: string | null;
@@ -52,7 +52,7 @@ export function usePermissionRequests() {
         .from("admin_requests")
         .select(`
           *,
-          profiles(email, first_name, name)
+          profiles:user_id(email, first_name, name)
         `)
         .order("requested_at", { ascending: false });
       
@@ -150,21 +150,18 @@ export function usePermissionRequests() {
       
       if (updateError) throw updateError;
       
-      // Ensure action exists before using it
-      if (request && 'action' in request) {
-        // Notify the user
-        await supabase.from("notifications").insert({
-          type: "permission_request_resolved",
-          content: JSON.stringify({
-            request_id: requestId,
-            action: request.action,
-            status: "approved",
-            resolved_by: user.email,
-            resolved_at: new Date().toISOString()
-          }),
-          user_id: request.user_id
-        });
-      }
+      // Notify the user
+      await supabase.from("notifications").insert({
+        type: "permission_request_resolved",
+        content: JSON.stringify({
+          request_id: requestId,
+          action: request.action,
+          status: "approved",
+          resolved_by: user.email,
+          resolved_at: new Date().toISOString()
+        }),
+        user_id: request.user_id
+      });
     },
     onSuccess: () => {
       toast({
@@ -208,21 +205,18 @@ export function usePermissionRequests() {
       
       if (updateError) throw updateError;
       
-      // Ensure action exists before using it
-      if (request && 'action' in request) {
-        // Notify the user
-        await supabase.from("notifications").insert({
-          type: "permission_request_resolved",
-          content: JSON.stringify({
-            request_id: requestId,
-            action: request.action,
-            status: "rejected",
-            resolved_by: user.email,
-            resolved_at: new Date().toISOString()
-          }),
-          user_id: request.user_id
-        });
-      }
+      // Notify the user
+      await supabase.from("notifications").insert({
+        type: "permission_request_resolved",
+        content: JSON.stringify({
+          request_id: requestId,
+          action: request.action,
+          status: "rejected",
+          resolved_by: user.email,
+          resolved_at: new Date().toISOString()
+        }),
+        user_id: request.user_id
+      });
     },
     onSuccess: () => {
       toast({
@@ -245,7 +239,7 @@ export function usePermissionRequests() {
     if (!userRequests) return false;
     
     return userRequests.some(
-      (req: any) => req.action === action && req.status === "pending"
+      (req) => req.action === action && req.status === "pending"
     );
   };
 

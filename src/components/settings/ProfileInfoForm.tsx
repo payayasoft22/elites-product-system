@@ -30,6 +30,9 @@ export const ProfileInfoForm: React.FC<ProfileInfoFormProps> = ({
         <div className="grid gap-2">
           <Label htmlFor="email">Email</Label>
           <Input id="email" defaultValue={userEmail} readOnly />
+          <p className="text-xs text-muted-foreground">
+            Your email address cannot be changed as it is used for authentication.
+          </p>
         </div>
         <div className="grid gap-2">
           <Label htmlFor="name">Full Name</Label>
@@ -49,7 +52,7 @@ export const ProfileInfoForm: React.FC<ProfileInfoFormProps> = ({
             onChange={(e) => setPhoneNumber(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            Your phone number can be used for password recovery.
+            Your phone number can be used for password recovery and notifications.
           </p>
         </div>
         <div className="flex justify-end pt-2">

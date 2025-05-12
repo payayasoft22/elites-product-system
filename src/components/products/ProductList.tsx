@@ -26,6 +26,9 @@ interface ProductListProps {
   handleAddProduct: () => void;
   handleEditProduct: (product: Product) => void;
   handleDeleteProduct: (product: Product) => void;
+  canAddProduct?: boolean;
+  canEditProduct?: boolean;
+  canDeleteProduct?: boolean;
 }
 
 const ProductList = ({
@@ -39,7 +42,10 @@ const ProductList = ({
   itemsPerPage,
   handleAddProduct,
   handleEditProduct,
-  handleDeleteProduct
+  handleDeleteProduct,
+  canAddProduct = true,
+  canEditProduct = true,
+  canDeleteProduct = true
 }: ProductListProps) => {
   const navigate = useNavigate();
 
@@ -109,9 +115,11 @@ const ProductList = ({
               <p className="text-muted-foreground max-w-sm mb-6">
                 Get started by adding your first product to track its price history.
               </p>
-              <Button onClick={handleAddProduct} className="gap-1">
-                <Plus className="h-4 w-4" /> Add Your First Product
-              </Button>
+              {canAddProduct && (
+                <Button onClick={handleAddProduct} className="gap-1">
+                  <Plus className="h-4 w-4" /> Add Your First Product
+                </Button>
+              )}
             </>
           )}
         </div>
@@ -146,24 +154,30 @@ const ProductList = ({
                           <History className="h-3.5 w-3.5" />
                           <span>Price History</span>
                         </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          className="flex items-center gap-1"
-                          onClick={() => handleEditProduct(product)}
-                        >
-                          <Edit className="h-3.5 w-3.5" />
-                          <span>Edit</span>
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          className="flex items-center gap-1 text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteProduct(product)}
-                        >
-                          <Trash className="h-3.5 w-3.5" />
-                          <span>Delete</span>
-                        </Button>
+                        
+                        {canEditProduct && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="flex items-center gap-1"
+                            onClick={() => handleEditProduct(product)}
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                            <span>Edit</span>
+                          </Button>
+                        )}
+                        
+                        {canDeleteProduct && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="flex items-center gap-1 text-destructive hover:text-destructive"
+                            onClick={() => handleDeleteProduct(product)}
+                          >
+                            <Trash className="h-3.5 w-3.5" />
+                            <span>Delete</span>
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

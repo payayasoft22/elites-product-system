@@ -118,6 +118,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error("An account with this email already exists. Please log in instead.");
       }
       
+      // Check if this is the first user and set them as admin
+      const { count } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true });
+        
+      if (count === 0 && data.user) {
+        // This is the first user, set as admin
+        await supabase
+          .from('profiles')
+          .update({ role: 'admin' })
+          .eq('id', data.user.id);
+          
+        toast({
+          title: "Admin account created",
+          description: "You've been set up as the system administrator.",
+        });
+      }
+      
       toast({
         title: "Account created",
         description: "Your account has been created successfully.",
