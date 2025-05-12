@@ -15,7 +15,11 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar";
 import { Camera, Loader2 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 
@@ -26,7 +30,7 @@ interface ProfileWithExtendedFields {
   name?: string;
   role?: string;
   avatar_url?: string;
-  phone_number?: number | null;
+  phone_number?: string;
   created_at?: string;
   last_sign_in_at?: string;
 }
@@ -62,9 +66,11 @@ const Settings = () => {
 
       if (profile) {
         const typedProfile = profile as ProfileWithExtendedFields;
+
         setFullName(typedProfile.first_name || "");
+
         if (typedProfile.phone_number !== undefined) {
-          setPhoneNumber(typedProfile.phone_number?.toString() || "");
+          setPhoneNumber(typedProfile.phone_number || "");
         }
 
         if (typedProfile.avatar_url) {
@@ -109,7 +115,7 @@ const Settings = () => {
 
       const updates: ProfileWithExtendedFields = {
         id: user?.id || "",
-        avatar_url: fileName,
+        avatar_url: fileName as string, // ✅ varchar format
       };
 
       const { error: updateError } = await supabase
@@ -146,7 +152,7 @@ const Settings = () => {
       const updates: ProfileWithExtendedFields = {
         id: user?.id || "",
         first_name: fullName,
-        phone_number: phoneNumber ? Number(phoneNumber) : null,
+        phone_number: phoneNumber || "", // ✅ varchar format
       };
 
       const { error } = await supabase
@@ -214,8 +220,7 @@ const Settings = () => {
       console.error("Error changing password:", error);
       toast({
         title: "Error",
-        description:
-          error.message || "Failed to update password. Please try again.",
+        description: error.message || "Failed to update password. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -354,7 +359,9 @@ const Settings = () => {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="confirm-password">Confirm New Password</Label>
+                  <Label htmlFor="confirm-password">
+                    Confirm New Password
+                  </Label>
                   <Input
                     id="confirm-password"
                     type="password"
