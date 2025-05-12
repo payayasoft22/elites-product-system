@@ -29,6 +29,8 @@ const Settings = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [fullName, setFullName] = useState("");
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -38,52 +40,47 @@ const Settings = () => {
   const [saving, setSaving] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
 
-  // Get the user's data when component mounts
   useEffect(() => {
     fetchUserProfile();
   }, [user]);
 
   const fetchUserProfile = async () => {
     if (!user) return;
-    
+
     try {
       const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
         .single();
-      
+
       if (error) throw error;
-      
+
       if (profile) {
         const typedProfile = profile as ProfileWithExtendedFields;
-        
-        // Set form fields
-        setFullName(typedProfile.first_name || '');
-        
-        // Check for phone_number field
-        if (typedProfile.phone_number !== undefined) {
-          setPhoneNumber(typedProfile.phone_number || '');
-        }
-        
-        // Fetch avatar if available
+
+        setFullName(typedProfile.first_name || "");
+        setName(typedProfile.name || "");
+        setRole(typedProfile.role || "");
+        setPhoneNumber(typedProfile.phone_number || "");
+
         if (typedProfile.avatar_url) {
           try {
             const { data } = await supabase.storage
-              .from('avatars')
+              .from("avatars")
               .download(typedProfile.avatar_url);
-              
+
             if (data) {
               const url = URL.createObjectURL(data);
               setAvatarUrl(url);
             }
           } catch (avatarError) {
-            console.error('Error downloading avatar:', avatarError);
+            console.error("Error downloading avatar:", avatarError);
           }
         }
       }
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error("Error fetching profile:", error);
       toast({
         title: "Error",
         description: "Failed to load profile data",
@@ -94,43 +91,40 @@ const Settings = () => {
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
-    
+
     try {
       setUploading(true);
       const file = e.target.files[0];
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.name.split(".").pop();
       const fileName = `${uuidv4()}.${fileExt}`;
-      
-      // Upload the file to Supabase storage
+
       const { error: uploadError } = await supabase.storage
-        .from('avatars')
+        .from("avatars")
         .upload(fileName, file);
-      
+
       if (uploadError) throw uploadError;
-      
-      // Update user profile with the new avatar URL
+
       const updates: ProfileWithExtendedFields = {
-        id: user?.id || '',
+        id: user?.id || "",
         avatar_url: fileName,
       };
-      
+
       const { error: updateError } = await supabase
-        .from('profiles')
+        .from("profiles")
         .update(updates)
-        .eq('id', user?.id);
-      
+        .eq("id", user?.id);
+
       if (updateError) throw updateError;
-      
-      // Display the new avatar
+
       const url = URL.createObjectURL(file);
       setAvatarUrl(url);
-      
+
       toast({
         title: "Success",
         description: "Profile picture updated successfully",
       });
     } catch (error) {
-      console.error('Error uploading avatar:', error);
+      console.error("Error uploading avatar:", error);
       toast({
         title: "Error",
         description: "Failed to upload profile picture",
@@ -144,28 +138,28 @@ const Settings = () => {
   const handleSaveChanges = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    
+
     try {
-      // Update profile data
       const updates: ProfileWithExtendedFields = {
-        id: user?.id || '',
+        id: user?.id || "",
         first_name: fullName,
-        phone_number: phoneNumber
+        name: name, // Sync the name field
+        phone_number: phoneNumber,
       };
-      
+
       const { error } = await supabase
-        .from('profiles')
+        .from("profiles")
         .update(updates)
-        .eq('id', user?.id);
-      
+        .eq("id", user?.id);
+
       if (error) throw error;
-      
+
       toast({
         title: "Settings Saved",
         description: "Your profile information has been updated.",
       });
     } catch (error) {
-      console.error('Error saving profile:', error);
+      console.error("Error saving profile:", error);
       toast({
         title: "Error",
         description: "Failed to save profile information",
@@ -178,8 +172,7 @@ const Settings = () => {
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validate passwords
+
     if (newPassword !== confirmPassword) {
       toast({
         title: "Password Mismatch",
@@ -188,7 +181,7 @@ const Settings = () => {
       });
       return;
     }
-    
+
     if (newPassword.length < 6) {
       toast({
         title: "Invalid Password",
@@ -197,28 +190,26 @@ const Settings = () => {
       });
       return;
     }
-    
+
     setChangingPassword(true);
-    
+
     try {
-      // Update password
       const { error } = await supabase.auth.updateUser({
-        password: newPassword
+        password: newPassword,
       });
-      
+
       if (error) throw error;
-      
-      // Reset form fields
+
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      
+
       toast({
         title: "Password Changed",
         description: "Your password has been updated successfully.",
       });
     } catch (error: any) {
-      console.error('Error changing password:', error);
+      console.error("Error changing password:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to update password. Please try again.",
@@ -236,7 +227,6 @@ const Settings = () => {
           <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
           <p className="text-muted-foreground">Manage your account settings and preferences.</p>
         </div>
-
         <div className="grid gap-6">
           <Card>
             <CardHeader>
@@ -244,44 +234,6 @@ const Settings = () => {
               <CardDescription>Update your account details and profile information.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex flex-col items-center space-y-4 sm:items-start">
-                <Label className="text-center sm:text-left">Profile Picture</Label>
-                <div className="flex flex-col items-center gap-4 sm:flex-row">
-                  <Avatar className="h-24 w-24">
-                    {avatarUrl ? (
-                      <AvatarImage src={avatarUrl} alt="Profile" />
-                    ) : (
-                      <AvatarFallback className="text-2xl">
-                        {fullName?.charAt(0) || "U"}
-                      </AvatarFallback>
-                    )}
-                  </Avatar>
-                  
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="picture" className="cursor-pointer">
-                      <div className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 hover:bg-secondary/80">
-                        <Camera className="h-4 w-4" />
-                        <span>{uploading ? "Uploading..." : "Change Picture"}</span>
-                        {uploading && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-                      </div>
-                      <input
-                        id="picture"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileChange}
-                        disabled={uploading}
-                        className="hidden"
-                      />
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      JPG, PNG or GIF. Max size 1MB.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              <Separator />
-              
               <form onSubmit={handleSaveChanges}>
                 <div className="grid gap-4">
                   <div className="grid gap-2">
@@ -289,19 +241,32 @@ const Settings = () => {
                     <Input id="email" defaultValue={user?.email} readOnly />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="name">Full Name</Label>
-                    <Input 
-                      id="name" 
-                      placeholder="Enter your full name" 
+                    <Label htmlFor="full-name">Full Name</Label>
+                    <Input
+                      id="full-name"
+                      placeholder="Enter your full name"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                     />
                   </div>
                   <div className="grid gap-2">
+                    <Label htmlFor="name">Display Name</Label>
+                    <Input
+                      id="name"
+                      placeholder="Enter your display name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="role">Role</Label>
+                    <Input id="role" value={role} readOnly />
+                  </div>
+                  <div className="grid gap-2">
                     <Label htmlFor="phone">Phone Number</Label>
-                    <Input 
-                      id="phone" 
-                      placeholder="Enter your phone number" 
+                    <Input
+                      id="phone"
+                      placeholder="Enter your phone number"
                       value={phoneNumber}
                       onChange={(e) => setPhoneNumber(e.target.value)}
                     />
@@ -319,7 +284,6 @@ const Settings = () => {
               </form>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader>
               <CardTitle>Change Password</CardTitle>
@@ -329,17 +293,17 @@ const Settings = () => {
               <CardContent className="space-y-4">
                 <div className="grid gap-2">
                   <Label htmlFor="current-password">Current Password</Label>
-                  <Input 
-                    id="current-password" 
-                    type="password" 
+                  <Input
+                    id="current-password"
+                    type="password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                   />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="new-password">New Password</Label>
-                  <Input 
-                    id="new-password" 
+                  <Input
+                    id="new-password"
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
@@ -347,8 +311,8 @@ const Settings = () => {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="confirm-password">Confirm New Password</Label>
-                  <Input 
-                    id="confirm-password" 
+                  <Input
+                    id="confirm-password"
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
