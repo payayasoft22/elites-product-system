@@ -1,6 +1,6 @@
 
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const signupSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters" }),
@@ -32,9 +33,18 @@ const signupSchema = z.object({
 type SignupFormValues = z.infer<typeof signupSchema>;
 
 const SignUp = () => {
-  const { signup, loading } = useAuth();
+  const { signup, loading, isAuthenticated } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [signupError, setSignupError] = useState<string | null>(null);
+  const navigate = useNavigate();
+  
+  // Redirect to dashboard if already logged in
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
   
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
@@ -47,10 +57,13 @@ const SignUp = () => {
   });
   
   const onSubmit = async (data: SignupFormValues) => {
+    setSignupError(null);
     try {
       await signup(data.email, data.password, data.name);
-    } catch (error) {
+      // Navigation will be handled by the auth context when the user is set
+    } catch (error: any) {
       console.error("Signup error:", error);
+      setSignupError(error.message || "Failed to create account. Please try again.");
     }
   };
 
@@ -69,6 +82,12 @@ const SignUp = () => {
           </CardHeader>
           
           <CardContent>
+            {signupError && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertDescription>{signupError}</AlertDescription>
+              </Alert>
+            )}
+
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <FormField

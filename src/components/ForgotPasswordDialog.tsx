@@ -62,7 +62,7 @@ const ForgotPasswordDialog = ({ open, onOpenChange }: ForgotPasswordDialogProps)
   
   const handleClose = () => {
     onOpenChange(false);
-    // Reset success state after dialog is closed
+    // Reset success state after dialog is closed with a delay to avoid UI flicker
     setTimeout(() => {
       setIsSuccess(false);
     }, 300);

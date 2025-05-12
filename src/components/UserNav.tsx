@@ -60,14 +60,13 @@ const UserNav = () => {
         try {
           const { data } = await supabase.storage
             .from('avatars')
-            .download(profile.avatar_url);
+            .createSignedUrl(profile.avatar_url, 60 * 60 * 24); // 24 hour expiry
             
-          if (data) {
-            const url = URL.createObjectURL(data);
-            setAvatarUrl(url);
+          if (data?.signedUrl) {
+            setAvatarUrl(data.signedUrl);
           }
         } catch (downloadError) {
-          console.error('Error downloading avatar:', downloadError);
+          console.error('Error creating signed URL for avatar:', downloadError);
         }
       }
     } catch (error) {
@@ -78,7 +77,7 @@ const UserNav = () => {
   // Clean up object URLs on unmount
   useEffect(() => {
     return () => {
-      if (avatarUrl) {
+      if (avatarUrl && avatarUrl.startsWith('blob:')) {
         URL.revokeObjectURL(avatarUrl);
       }
     };

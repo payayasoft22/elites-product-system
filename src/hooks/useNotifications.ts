@@ -16,8 +16,8 @@ export function useNotifications() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data: notifications, isLoading } = useQuery({
-    queryKey: ["notifications"],
+  const { data: notifications, isLoading, error, refetch } = useQuery({
+    queryKey: ["notifications", user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
       
@@ -35,6 +35,7 @@ export function useNotifications() {
       return data as Notification[];
     },
     enabled: !!user,
+    refetchOnWindowFocus: true,
   });
 
   const unreadCount = notifications?.filter(n => !n.is_read).length || 0;
@@ -47,9 +48,10 @@ export function useNotifications() {
         .eq("id", id);
       
       if (error) throw error;
+      return id;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications", user?.id] });
     },
   });
 
@@ -60,12 +62,13 @@ export function useNotifications() {
       const { error } = await supabase
         .from("notifications")
         .update({ is_read: true })
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .eq("is_read", false);
       
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications", user?.id] });
     },
   });
 
@@ -73,6 +76,8 @@ export function useNotifications() {
     notifications,
     unreadCount,
     isLoading,
+    error,
+    refetch,
     markAsRead,
     markAllAsRead,
   };

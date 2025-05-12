@@ -33,7 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         
-        // Don't call other Supabase functions directly in the callback
+        // Handle auth events with appropriate UI feedback
         if (event === 'SIGNED_IN') {
           toast({
             title: "Signed in successfully",
@@ -43,6 +43,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           toast({
             title: "Signed out",
             description: "You have been signed out successfully.",
+          });
+        } else if (event === 'USER_UPDATED') {
+          toast({
+            title: "Account updated",
+            description: "Your account information has been updated.",
+          });
+        } else if (event === 'PASSWORD_RECOVERY') {
+          toast({
+            title: "Password recovery initiated",
+            description: "Follow the instructions to reset your password.",
           });
         }
       }
@@ -89,7 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       // Include the name in the user metadata
-      const { error } = await supabase.auth.signUp({ 
+      const { data, error } = await supabase.auth.signUp({ 
         email, 
         password,
         options: {
@@ -103,11 +113,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw error;
       }
       
+      if (data?.user?.identities && data.user.identities.length === 0) {
+        // User already exists
+        throw new Error("An account with this email already exists. Please log in instead.");
+      }
+      
       toast({
         title: "Account created",
-        description: "Your account has been created successfully. Please verify your email.",
+        description: "Your account has been created successfully.",
         variant: "default",
       });
+      
       navigate("/dashboard");
     } catch (error: any) {
       console.error("Signup error:", error);

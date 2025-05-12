@@ -1,6 +1,6 @@
 
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,8 +20,26 @@ const ResetPassword = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [hashVerified, setHashVerified] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    // Check if there's a hash in the URL
+    const type = searchParams.get('type');
+    const accessToken = searchParams.get('access_token');
+    
+    if (type === 'recovery' && accessToken) {
+      setHashVerified(true);
+    } else {
+      toast({
+        title: "Invalid or expired link",
+        description: "This password reset link is invalid or has expired. Please request a new one.",
+        variant: "destructive",
+      });
+    }
+  }, [searchParams, toast]);
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +78,9 @@ const ResetPassword = () => {
       });
 
       // Navigate to login page after successful password reset
-      navigate("/login");
+      setTimeout(() => {
+        navigate("/login");
+      }, 1500);
     } catch (error: any) {
       console.error("Error resetting password:", error);
       toast({
@@ -72,6 +92,29 @@ const ResetPassword = () => {
       setLoading(false);
     }
   };
+
+  if (!hashVerified) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-2xl font-bold">Invalid Link</CardTitle>
+            <CardDescription>
+              This password reset link is invalid or has expired.
+            </CardDescription>
+          </CardHeader>
+          <CardFooter>
+            <Button 
+              className="w-full" 
+              onClick={() => navigate("/login")}
+            >
+              Return to Login
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">

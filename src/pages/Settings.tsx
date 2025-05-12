@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,8 @@ const Settings = () => {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [existingAvatarPath, setExistingAvatarPath] = useState<string | null>(null);
 
   useEffect(() => {
     fetchUserProfile();
@@ -74,14 +77,14 @@ const Settings = () => {
         }
 
         if (typedProfile.avatar_url) {
+          setExistingAvatarPath(typedProfile.avatar_url);
           try {
             const { data } = await supabase.storage
               .from("avatars")
-              .download(typedProfile.avatar_url);
+              .createSignedUrl(typedProfile.avatar_url, 60 * 60 * 24); // 24 hour expiry
 
-            if (data) {
-              const url = URL.createObjectURL(data);
-              setAvatarUrl(url);
+            if (data?.signedUrl) {
+              setAvatarUrl(data.signedUrl);
             }
           } catch (avatarError) {
             console.error("Error downloading avatar:", avatarError);
@@ -101,47 +104,9 @@ const Settings = () => {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
 
-    try {
-      setUploading(true);
-      const file = e.target.files[0];
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${uuidv4()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(fileName, file);
-
-      if (uploadError) throw uploadError;
-
-      const updates: ProfileWithExtendedFields = {
-        id: user?.id || "",
-        avatar_url: fileName as string, // ✅ varchar format
-      };
-
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update(updates)
-        .eq("id", user?.id);
-
-      if (updateError) throw updateError;
-
-      const url = URL.createObjectURL(file);
-      setAvatarUrl(url);
-
-      toast({
-        title: "Success",
-        description: "Profile picture updated successfully",
-      });
-    } catch (error) {
-      console.error("Error uploading avatar:", error);
-      toast({
-        title: "Error",
-        description: "Failed to upload profile picture",
-        variant: "destructive",
-      });
-    } finally {
-      setUploading(false);
-    }
+    const file = e.target.files[0];
+    setAvatarFile(file);
+    setAvatarUrl(URL.createObjectURL(file));
   };
 
   const handleSaveChanges = async (e: React.FormEvent) => {
@@ -149,11 +114,44 @@ const Settings = () => {
     setSaving(true);
 
     try {
+      // Handle avatar upload if there's a new file
+      let avatarPath = existingAvatarPath;
+      
+      if (avatarFile) {
+        setUploading(true);
+        const fileExt = avatarFile.name.split(".").pop();
+        const fileName = `${uuidv4()}.${fileExt}`;
+        
+        // Upload the new avatar
+        const { error: uploadError } = await supabase.storage
+          .from("avatars")
+          .upload(fileName, avatarFile);
+
+        if (uploadError) throw uploadError;
+        
+        // If upload successful, update the avatar path
+        avatarPath = fileName;
+        
+        // Delete the old avatar if it exists
+        if (existingAvatarPath) {
+          await supabase.storage
+            .from("avatars")
+            .remove([existingAvatarPath]);
+        }
+        
+        setExistingAvatarPath(fileName);
+        setUploading(false);
+      }
+
       const updates: ProfileWithExtendedFields = {
         id: user?.id || "",
         first_name: fullName,
-        phone_number: phoneNumber || "", // ✅ varchar format
+        phone_number: phoneNumber || "",
       };
+      
+      if (avatarPath) {
+        updates.avatar_url = avatarPath;
+      }
 
       const { error } = await supabase
         .from("profiles")
@@ -227,6 +225,15 @@ const Settings = () => {
       setChangingPassword(false);
     }
   };
+
+  // Clean up object URLs when component unmounts or URL changes
+  useEffect(() => {
+    return () => {
+      if (avatarUrl && avatarUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(avatarUrl);
+      }
+    };
+  }, [avatarUrl]);
 
   return (
     <DashboardLayout>
