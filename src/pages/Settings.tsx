@@ -1,8 +1,12 @@
+// pages/settings.tsx
 
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card, CardContent, CardDescription, CardFooter,
+  CardHeader, CardTitle
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -11,25 +15,22 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Camera, Loader2 } from "lucide-react";
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from "uuid";
 
-interface ProfileWithExtendedFields {
+interface Profile {
   id: string;
-  first_name?: string;
-  email?: string;
   name?: string;
-  role?: string;
+  email?: string;
   avatar_url?: string;
-  phone_number?: string;
+  phone?: string;
   created_at?: string;
-  last_sign_in_at?: string;
 }
 
 const Settings = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [fullName, setFullName] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -38,52 +39,39 @@ const Settings = () => {
   const [saving, setSaving] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
 
-  // Get the user's data when component mounts
   useEffect(() => {
     fetchUserProfile();
   }, [user]);
 
   const fetchUserProfile = async () => {
     if (!user) return;
-    
+
     try {
       const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
         .single();
-      
+
       if (error) throw error;
-      
+
       if (profile) {
-        const typedProfile = profile as ProfileWithExtendedFields;
-        
-        // Set form fields
-        setFullName(typedProfile.first_name || '');
-        
-        // Check for phone_number field
-        if (typedProfile.phone_number !== undefined) {
-          setPhoneNumber(typedProfile.phone_number || '');
-        }
-        
-        // Fetch avatar if available
-        if (typedProfile.avatar_url) {
-          try {
-            const { data } = await supabase.storage
-              .from('avatars')
-              .download(typedProfile.avatar_url);
-              
-            if (data) {
-              const url = URL.createObjectURL(data);
-              setAvatarUrl(url);
-            }
-          } catch (avatarError) {
-            console.error('Error downloading avatar:', avatarError);
+        setName(profile.name || "");
+        setPhone(profile.phone || "");
+
+        if (profile.avatar_url) {
+          const { data } = await supabase.storage
+            .from("avatars")
+            .download(profile.avatar_url);
+
+          if (data) {
+            const url = URL.createObjectURL(data);
+            setAvatarUrl(url);
           }
         }
       }
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error("Error fetching profile:", error);
       toast({
         title: "Error",
         description: "Failed to load profile data",
@@ -94,43 +82,40 @@ const Settings = () => {
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
-    
+
     try {
       setUploading(true);
       const file = e.target.files[0];
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.name.split(".").pop();
       const fileName = `${uuidv4()}.${fileExt}`;
-      
-      // Upload the file to Supabase storage
+
       const { error: uploadError } = await supabase.storage
-        .from('avatars')
+        .from("avatars")
         .upload(fileName, file);
-      
+
       if (uploadError) throw uploadError;
-      
-      // Update user profile with the new avatar URL
-      const updates: ProfileWithExtendedFields = {
-        id: user?.id || '',
+
+      const updates: Profile = {
+        id: user?.id || "",
         avatar_url: fileName,
       };
-      
+
       const { error: updateError } = await supabase
-        .from('profiles')
+        .from("profiles")
         .update(updates)
-        .eq('id', user?.id);
-      
+        .eq("id", user?.id);
+
       if (updateError) throw updateError;
-      
-      // Display the new avatar
+
       const url = URL.createObjectURL(file);
       setAvatarUrl(url);
-      
+
       toast({
         title: "Success",
         description: "Profile picture updated successfully",
       });
     } catch (error) {
-      console.error('Error uploading avatar:', error);
+      console.error("Error uploading avatar:", error);
       toast({
         title: "Error",
         description: "Failed to upload profile picture",
@@ -144,28 +129,27 @@ const Settings = () => {
   const handleSaveChanges = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    
+
     try {
-      // Update profile data
-      const updates: ProfileWithExtendedFields = {
-        id: user?.id || '',
-        first_name: fullName,
-        phone_number: phoneNumber
+      const updates: Profile = {
+        id: user?.id || "",
+        name,
+        phone,
       };
-      
+
       const { error } = await supabase
-        .from('profiles')
+        .from("profiles")
         .update(updates)
-        .eq('id', user?.id);
-      
+        .eq("id", user?.id);
+
       if (error) throw error;
-      
+
       toast({
         title: "Settings Saved",
         description: "Your profile information has been updated.",
       });
     } catch (error) {
-      console.error('Error saving profile:', error);
+      console.error("Error saving profile:", error);
       toast({
         title: "Error",
         description: "Failed to save profile information",
@@ -178,8 +162,7 @@ const Settings = () => {
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validate passwords
+
     if (newPassword !== confirmPassword) {
       toast({
         title: "Password Mismatch",
@@ -188,7 +171,7 @@ const Settings = () => {
       });
       return;
     }
-    
+
     if (newPassword.length < 6) {
       toast({
         title: "Invalid Password",
@@ -197,28 +180,26 @@ const Settings = () => {
       });
       return;
     }
-    
+
     setChangingPassword(true);
-    
+
     try {
-      // Update password
       const { error } = await supabase.auth.updateUser({
-        password: newPassword
+        password: newPassword,
       });
-      
+
       if (error) throw error;
-      
-      // Reset form fields
+
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      
+
       toast({
         title: "Password Changed",
         description: "Your password has been updated successfully.",
       });
     } catch (error: any) {
-      console.error('Error changing password:', error);
+      console.error("Error changing password:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to update password. Please try again.",
@@ -238,6 +219,7 @@ const Settings = () => {
         </div>
 
         <div className="grid gap-6">
+          {/* Profile Card */}
           <Card>
             <CardHeader>
               <CardTitle>Profile Information</CardTitle>
@@ -252,11 +234,10 @@ const Settings = () => {
                       <AvatarImage src={avatarUrl} alt="Profile" />
                     ) : (
                       <AvatarFallback className="text-2xl">
-                        {fullName?.charAt(0) || "U"}
+                        {name?.charAt(0) || "U"}
                       </AvatarFallback>
                     )}
                   </Avatar>
-                  
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="picture" className="cursor-pointer">
                       <div className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 hover:bg-secondary/80">
@@ -273,15 +254,13 @@ const Settings = () => {
                         className="hidden"
                       />
                     </Label>
-                    <p className="text-xs text-muted-foreground">
-                      JPG, PNG or GIF. Max size 1MB.
-                    </p>
+                    <p className="text-xs text-muted-foreground">JPG, PNG or GIF. Max size 1MB.</p>
                   </div>
                 </div>
               </div>
-              
+
               <Separator />
-              
+
               <form onSubmit={handleSaveChanges}>
                 <div className="grid gap-4">
                   <div className="grid gap-2">
@@ -290,20 +269,20 @@ const Settings = () => {
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="name">Full Name</Label>
-                    <Input 
-                      id="name" 
-                      placeholder="Enter your full name" 
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
+                    <Input
+                      id="name"
+                      placeholder="Enter your full name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
                     />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="phone">Phone Number</Label>
-                    <Input 
-                      id="phone" 
-                      placeholder="Enter your phone number" 
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
+                    <Input
+                      id="phone"
+                      placeholder="Enter your phone number"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
                     />
                     <p className="text-xs text-muted-foreground">
                       Your phone number can be used for password recovery.
@@ -320,6 +299,7 @@ const Settings = () => {
             </CardContent>
           </Card>
 
+          {/* Password Card */}
           <Card>
             <CardHeader>
               <CardTitle>Change Password</CardTitle>
@@ -329,17 +309,17 @@ const Settings = () => {
               <CardContent className="space-y-4">
                 <div className="grid gap-2">
                   <Label htmlFor="current-password">Current Password</Label>
-                  <Input 
-                    id="current-password" 
-                    type="password" 
+                  <Input
+                    id="current-password"
+                    type="password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                   />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="new-password">New Password</Label>
-                  <Input 
-                    id="new-password" 
+                  <Input
+                    id="new-password"
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
@@ -347,8 +327,8 @@ const Settings = () => {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="confirm-password">Confirm New Password</Label>
-                  <Input 
-                    id="confirm-password" 
+                  <Input
+                    id="confirm-password"
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
@@ -367,11 +347,6 @@ const Settings = () => {
       </div>
     </DashboardLayout>
   );
-};
-
-export default Settings;
-
-
 };
 
 export default Settings;
