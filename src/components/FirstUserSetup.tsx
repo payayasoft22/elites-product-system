@@ -72,7 +72,7 @@ const FirstUserSetup = () => {
 
           toast({
             title: 'Admin Setup Complete',
-            description: 'As the first user, you have been granted admin privileges.',
+            description: 'As the first user, you have been granted admin privileges in the Elites Project System.',
           });
         }
       } catch (error) {
