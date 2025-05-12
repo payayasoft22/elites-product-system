@@ -1,11 +1,13 @@
-// pages/settings.tsx
-
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import {
-  Card, CardContent, CardDescription, CardFooter,
-  CardHeader, CardTitle
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,20 +19,23 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Camera, Loader2 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 
-interface Profile {
+interface ProfileWithExtendedFields {
   id: string;
-  name?: string;
+  first_name?: string;
   email?: string;
+  name?: string;
+  role?: string;
   avatar_url?: string;
-  phone?: string;
+  phone_number?: number | null;
   created_at?: string;
+  last_sign_in_at?: string;
 }
 
 const Settings = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -56,17 +61,24 @@ const Settings = () => {
       if (error) throw error;
 
       if (profile) {
-        setName(profile.name || "");
-        setPhone(profile.phone || "");
+        const typedProfile = profile as ProfileWithExtendedFields;
+        setFullName(typedProfile.first_name || "");
+        if (typedProfile.phone_number !== undefined) {
+          setPhoneNumber(typedProfile.phone_number?.toString() || "");
+        }
 
-        if (profile.avatar_url) {
-          const { data } = await supabase.storage
-            .from("avatars")
-            .download(profile.avatar_url);
+        if (typedProfile.avatar_url) {
+          try {
+            const { data } = await supabase.storage
+              .from("avatars")
+              .download(typedProfile.avatar_url);
 
-          if (data) {
-            const url = URL.createObjectURL(data);
-            setAvatarUrl(url);
+            if (data) {
+              const url = URL.createObjectURL(data);
+              setAvatarUrl(url);
+            }
+          } catch (avatarError) {
+            console.error("Error downloading avatar:", avatarError);
           }
         }
       }
@@ -95,7 +107,7 @@ const Settings = () => {
 
       if (uploadError) throw uploadError;
 
-      const updates: Profile = {
+      const updates: ProfileWithExtendedFields = {
         id: user?.id || "",
         avatar_url: fileName,
       };
@@ -131,10 +143,10 @@ const Settings = () => {
     setSaving(true);
 
     try {
-      const updates: Profile = {
+      const updates: ProfileWithExtendedFields = {
         id: user?.id || "",
-        name,
-        phone,
+        first_name: fullName,
+        phone_number: phoneNumber ? Number(phoneNumber) : null,
       };
 
       const { error } = await supabase
@@ -202,7 +214,8 @@ const Settings = () => {
       console.error("Error changing password:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to update password. Please try again.",
+        description:
+          error.message || "Failed to update password. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -215,35 +228,45 @@ const Settings = () => {
       <div className="space-y-6">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
-          <p className="text-muted-foreground">Manage your account settings and preferences.</p>
+          <p className="text-muted-foreground">
+            Manage your account settings and preferences.
+          </p>
         </div>
 
         <div className="grid gap-6">
-          {/* Profile Card */}
           <Card>
             <CardHeader>
               <CardTitle>Profile Information</CardTitle>
-              <CardDescription>Update your account details and profile information.</CardDescription>
+              <CardDescription>
+                Update your account details and profile information.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex flex-col items-center space-y-4 sm:items-start">
-                <Label className="text-center sm:text-left">Profile Picture</Label>
+                <Label className="text-center sm:text-left">
+                  Profile Picture
+                </Label>
                 <div className="flex flex-col items-center gap-4 sm:flex-row">
                   <Avatar className="h-24 w-24">
                     {avatarUrl ? (
                       <AvatarImage src={avatarUrl} alt="Profile" />
                     ) : (
                       <AvatarFallback className="text-2xl">
-                        {name?.charAt(0) || "U"}
+                        {fullName?.charAt(0) || "U"}
                       </AvatarFallback>
                     )}
                   </Avatar>
+
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="picture" className="cursor-pointer">
                       <div className="flex items-center gap-2 rounded-md bg-secondary px-4 py-2 hover:bg-secondary/80">
                         <Camera className="h-4 w-4" />
-                        <span>{uploading ? "Uploading..." : "Change Picture"}</span>
-                        {uploading && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                        <span>
+                          {uploading ? "Uploading..." : "Change Picture"}
+                        </span>
+                        {uploading && (
+                          <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                        )}
                       </div>
                       <input
                         id="picture"
@@ -254,7 +277,9 @@ const Settings = () => {
                         className="hidden"
                       />
                     </Label>
-                    <p className="text-xs text-muted-foreground">JPG, PNG or GIF. Max size 1MB.</p>
+                    <p className="text-xs text-muted-foreground">
+                      JPG, PNG or GIF. Max size 1MB.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -272,8 +297,8 @@ const Settings = () => {
                     <Input
                       id="name"
                       placeholder="Enter your full name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
                     />
                   </div>
                   <div className="grid gap-2">
@@ -281,8 +306,8 @@ const Settings = () => {
                     <Input
                       id="phone"
                       placeholder="Enter your phone number"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
                     />
                     <p className="text-xs text-muted-foreground">
                       Your phone number can be used for password recovery.
@@ -290,7 +315,9 @@ const Settings = () => {
                   </div>
                   <div className="flex justify-end pt-2">
                     <Button type="submit" disabled={saving}>
-                      {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {saving && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
                       Save Changes
                     </Button>
                   </div>
@@ -299,11 +326,12 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          {/* Password Card */}
           <Card>
             <CardHeader>
               <CardTitle>Change Password</CardTitle>
-              <CardDescription>Update your password to ensure account security.</CardDescription>
+              <CardDescription>
+                Update your password to ensure account security.
+              </CardDescription>
             </CardHeader>
             <form onSubmit={handleChangePassword}>
               <CardContent className="space-y-4">
@@ -337,7 +365,9 @@ const Settings = () => {
               </CardContent>
               <CardFooter>
                 <Button type="submit" disabled={changingPassword}>
-                  {changingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {changingPassword && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
                   Change Password
                 </Button>
               </CardFooter>
