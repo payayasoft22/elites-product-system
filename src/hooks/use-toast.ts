@@ -1,16 +1,15 @@
 
-import { Toast, ToastActionElement, ToastProps } from "@/components/ui/toast";
-import { useToast as useToastInternal } from "@/components/ui/use-toast";
+import { Toast, ToastActionElement, ToastProps } from "@/components/ui/toast"
+import { toast as toastFunction, useToast as useToastHook } from "@/components/ui/use-toast"
 
 type ToastOptions = Omit<ToastProps, "id"> & {
-  id?: string;
-  action?: ToastActionElement;
-};
+  id?: string
+  action?: ToastActionElement
+}
 
-export const toast = ({ ...props }: ToastOptions) => {
-  const { toast: internalToast } = useToastInternal();
-  return internalToast(props);
-};
+export const toast = (props: ToastOptions) => {
+  return toastFunction(props)
+}
 
-export const useToast = useToastInternal;
-export type { ToastOptions };
+export const useToast = useToastHook
+export type { ToastOptions }
