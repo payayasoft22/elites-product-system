@@ -548,7 +548,7 @@ const Products = () => {
         </div>
 
         {!permissionsLoading && !isAdmin && !canAddProduct && !canEditProduct && !canDeleteProduct && (
-          <Alert variant="warning" className="mb-4">
+          <Alert variant="default" className="mb-4">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Limited Access</AlertTitle>
             <AlertDescription>

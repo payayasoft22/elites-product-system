@@ -46,7 +46,7 @@ export function usePermissionRequests() {
         throw error;
       }
       
-      return data as unknown as PermissionRequest[];
+      return data as PermissionRequest[];
     },
     enabled: !!user,
   });
@@ -73,7 +73,7 @@ export function usePermissionRequests() {
         throw error;
       }
       
-      return data as unknown as PermissionRequest[];
+      return data as PermissionRequest[];
     },
     enabled: !!user,
   });
@@ -113,7 +113,7 @@ export function usePermissionRequests() {
         .eq('user_id', user.id)
         .eq('action', action)
         .eq('status', 'pending')
-        .limit(1);
+        .limit(1) as { data: any[], error: any };
         
       if (existingError) throw existingError;
       
