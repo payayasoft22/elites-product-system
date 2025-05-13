@@ -1,47 +1,42 @@
 
-import React from "react";
-import { Link } from "react-router-dom";
-import { AlignJustify, Package } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useSidebar } from "@/contexts/SidebarContext";
-import UserNav from "@/components/UserNav";
-import NotificationsPopover from "@/components/NotificationsPopover";
+import React, { ReactNode } from "react";
+import { Sidebar } from "@/components/ui/sidebar";
+import { Toaster } from "@/components/ui/toaster";
+import { useAuth } from "@/contexts/AuthContext";
+import { Helmet } from "react-helmet-async";
+import { usePermission } from "@/hooks/usePermission";
+import AdminActionLog from "@/components/AdminActionLog";
 
-const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
-  const { isSidebarOpen, toggleSidebar } = useSidebar();
+interface DashboardLayoutProps {
+  children: ReactNode;
+}
 
+const DashboardLayout = ({ children }: DashboardLayoutProps) => {
+  const { user } = useAuth();
+  const { isAdmin } = usePermission();
+  
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b bg-background">
-        <div className="container flex h-16 items-center justify-between py-4">
-          <div className="flex items-center">
-            <Button
-              variant="ghost"
-              className="mr-2 px-2 md:hidden"
-              onClick={toggleSidebar}
-            >
-              <AlignJustify className="h-5 w-5" />
-              <span className="sr-only">Toggle Menu</span>
-            </Button>
-            <Link to="/dashboard" className="flex items-center space-x-2">
-              <Package className="h-6 w-6 text-primary" />
-              <span className="font-bold">Elites Product Management</span>
-            </Link>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <NotificationsPopover />
-            <UserNav />
-          </div>
+    <>
+      <Helmet>
+        <title>Elites Project System</title>
+      </Helmet>
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 flex flex-col lg:ml-64">
+          <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
+            {children}
+            
+            {/* Admin Action Log - Only visible to admin users */}
+            {isAdmin && (
+              <div className="mt-8">
+                <AdminActionLog />
+              </div>
+            )}
+          </main>
         </div>
-      </header>
-      
-      <div className="container flex-1 items-start pt-6">
-        <main className="flex-1 pb-12">
-          {children}
-        </main>
       </div>
-    </div>
+      <Toaster />
+    </>
   );
 };
 

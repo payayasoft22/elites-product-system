@@ -1,20 +1,22 @@
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/hooks/use-toast";
-import { PermissionAction } from "@/integrations/supabase/client";
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase, PermissionAction } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 
-export interface PermissionRequest {
+interface PermissionRequest {
   id: string;
+  action: string; // This was missing in the interface
   user_id: string;
-  action: PermissionAction;
-  status: "pending" | "approved" | "rejected";
-  requested_at?: string;
-  resolved_at?: string | null;
-  resolved_by?: string | null;
-  user_name?: string;
-  user_email?: string;
+  requested_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  user?: {
+    email: string;
+    name: string;
+    first_name: string;
+  };
 }
 
 export function usePermissionRequests() {
@@ -22,235 +24,306 @@ export function usePermissionRequests() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Get permission requests for the current user
-  const { data: userRequests, isLoading: userRequestsLoading } = useQuery({
-    queryKey: ["permission_requests", "user", user?.id],
+  // Fetch my pending permission requests
+  const myPermissionRequests = useQuery({
+    queryKey: ['my_permission_requests', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
       
       const { data, error } = await supabase
-        .from("admin_requests")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("requested_at", { ascending: false });
-      
+        .from('permission_requests')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('requested_at', { ascending: false });
+        
       if (error) {
-        console.error("Error fetching permission requests:", error);
+        console.error('Error fetching permission requests:', error);
         throw error;
       }
       
-      return data as PermissionRequest[] || [];
+      return data as PermissionRequest[];
     },
     enabled: !!user,
   });
 
-  // Get all permission requests (for admins)
-  const { data: allRequests, isLoading: allRequestsLoading } = useQuery({
-    queryKey: ["permission_requests", "all"],
+  // Fetch all pending permission requests (for admins)
+  const pendingPermissionRequests = useQuery({
+    queryKey: ['pending_permission_requests'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("admin_requests")
+        .from('permission_requests')
         .select(`
           *,
-          profiles:user_id(email, first_name, name)
+          user:user_id (
+            email,
+            name,
+            first_name
+          )
         `)
-        .order("requested_at", { ascending: false });
-      
+        .eq('status', 'pending')
+        .order('requested_at', { ascending: false });
+        
       if (error) {
-        console.error("Error fetching all permission requests:", error);
+        console.error('Error fetching pending permission requests:', error);
         throw error;
       }
       
-      // Transform data to include user details
-      return (data || []).map((item: any) => ({
-        ...item,
-        user_email: item.profiles?.email,
-        user_name: item.profiles?.first_name || item.profiles?.name || 'Unknown User'
-      })) as PermissionRequest[];
+      return data as PermissionRequest[];
     },
     enabled: !!user,
   });
-
-  // Request a permission
+  
+  // Request a new permission
   const requestPermission = useMutation({
     mutationFn: async (action: PermissionAction) => {
-      if (!user?.id) throw new Error("User not authenticated");
+      if (!user?.id) throw new Error('Not authenticated');
       
-      const { error } = await supabase
-        .from("admin_requests")
-        .insert([
-          { 
-            user_id: user.id,
-            action: action,
-            status: "pending"
-          }
-        ]);
+      // First check if the user already has this permission
+      const { data: roleData, error: roleError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+        
+      if (roleError) throw roleError;
       
+      const userRole = roleData?.role;
+      
+      const { data: permissionData, error: permissionError } = await supabase
+        .from('role_permissions')
+        .select('*')
+        .eq('role', userRole)
+        .eq('action', action)
+        .single();
+        
+      if (!permissionError && permissionData?.allowed) {
+        throw new Error('You already have this permission');
+      }
+      
+      // Check if there's already a pending request for this action
+      const { data: existingRequests, error: existingError } = await supabase
+        .from('permission_requests')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('action', action)
+        .eq('status', 'pending')
+        .limit(1);
+        
+      if (existingError) throw existingError;
+      
+      if (existingRequests && existingRequests.length > 0) {
+        throw new Error('You already have a pending request for this permission');
+      }
+      
+      // Insert the new permission request
+      const { data: newRequest, error } = await supabase
+        .from('permission_requests')
+        .insert({
+          user_id: user.id,
+          action: action,
+          status: 'pending',
+          requested_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+        
       if (error) throw error;
       
-      // Notify admins
-      const { data: admins } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("role", "admin");
-      
-      if (admins && admins.length > 0) {
-        const notifications = admins.map(admin => ({
-          type: "permission_request",
-          content: JSON.stringify({
+      // Create a notification for all admins
+      await supabase
+        .from('notifications')
+        .insert({
+          type: 'permission_request',
+          content: {
+            user_id: user.id,
             action: action,
-            requested_by: user.email,
             requested_at: new Date().toISOString()
-          }),
-          user_id: admin.id
-        }));
+          },
+          is_read: false
+        });
         
-        await supabase.from("notifications").insert(notifications);
+      return newRequest;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my_permission_requests'] });
+      toast({
+        title: 'Permission Requested',
+        description: 'Your permission request has been submitted.'
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Request Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  });
+
+  // Approve a permission request (admin only)
+  const approvePermissionRequest = useMutation({
+    mutationFn: async (request: PermissionRequest) => {
+      if (!user?.id) throw new Error('Not authenticated');
+      
+      // Update the permission request
+      const { error: updateRequestError } = await supabase
+        .from('permission_requests')
+        .update({
+          status: 'approved',
+          resolved_at: new Date().toISOString(),
+          resolved_by: user.id
+        })
+        .eq('id', request.id);
+        
+      if (updateRequestError) throw updateRequestError;
+      
+      // Get the user's role
+      const { data: userData, error: userError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', request.user_id)
+        .single();
+        
+      if (userError) throw userError;
+      
+      const userRole = userData?.role;
+      
+      // Check if the role_permission record exists
+      const { data: existingPermission, error: existingError } = await supabase
+        .from('role_permissions')
+        .select('*')
+        .eq('role', userRole)
+        .eq('action', request.action)
+        .limit(1);
+        
+      if (existingError) throw existingError;
+      
+      let permissionAction;
+      
+      if (existingPermission && existingPermission.length > 0) {
+        // Update existing permission
+        const { error: permissionError } = await supabase
+          .from('role_permissions')
+          .update({
+            allowed: true
+          })
+          .eq('role', userRole)
+          .eq('action', request.action);
+          
+        if (permissionError) throw permissionError;
+        
+        permissionAction = 'updated';
+      } else {
+        // Insert new permission
+        const { error: permissionError } = await supabase
+          .from('role_permissions')
+          .insert({
+            role: userRole,
+            action: request.action,
+            allowed: true
+          });
+          
+        if (permissionError) throw permissionError;
+        
+        permissionAction = 'created';
       }
+      
+      // Create a notification for the user
+      await supabase
+        .from('notifications')
+        .insert({
+          type: 'permission_request_resolved',
+          content: {
+            action: request.action,
+            status: 'approved',
+            resolved_at: new Date().toISOString(),
+            resolved_by: user.id
+          },
+          user_id: request.user_id,
+          is_read: false
+        });
+        
+      return { requestId: request.id, permissionAction };
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending_permission_requests'] });
       toast({
-        title: "Request submitted",
-        description: "Your permission request has been submitted for approval.",
+        title: 'Permission Approved',
+        description: 'The permission request has been approved.'
       });
-      queryClient.invalidateQueries({ queryKey: ["permission_requests"] });
     },
     onError: (error: Error) => {
       toast({
-        title: "Request failed",
-        description: error.message || "Failed to submit permission request.",
-        variant: "destructive",
+        title: 'Approval Failed',
+        description: error.message,
+        variant: 'destructive',
       });
-    },
+    }
   });
 
-  // Approve a permission request
-  const approveRequest = useMutation({
-    mutationFn: async (requestId: string) => {
-      if (!user?.id) throw new Error("User not authenticated");
+  // Reject a permission request (admin only)
+  const rejectPermissionRequest = useMutation({
+    mutationFn: async (request: PermissionRequest) => {
+      if (!user?.id) throw new Error('Not authenticated');
       
-      // Get the request details
-      const { data: request, error: requestError } = await supabase
-        .from("admin_requests")
-        .select("*")
-        .eq("id", requestId)
-        .single();
-      
-      if (requestError) throw requestError;
-      
-      // Update request status
-      const { error: updateError } = await supabase
-        .from("admin_requests")
-        .update({ 
-          status: "approved",
+      // Update the permission request
+      const { error: updateRequestError } = await supabase
+        .from('permission_requests')
+        .update({
+          status: 'rejected',
           resolved_at: new Date().toISOString(),
           resolved_by: user.id
         })
-        .eq("id", requestId);
+        .eq('id', request.id);
+        
+      if (updateRequestError) throw updateRequestError;
       
-      if (updateError) throw updateError;
-      
-      // Notify the user
-      await supabase.from("notifications").insert({
-        type: "permission_request_resolved",
-        content: JSON.stringify({
-          request_id: requestId,
-          action: request.action,
-          status: "approved",
-          resolved_by: user.email,
-          resolved_at: new Date().toISOString()
-        }),
-        user_id: request.user_id
-      });
+      // Create a notification for the user
+      await supabase
+        .from('notifications')
+        .insert({
+          type: 'permission_request_resolved',
+          content: {
+            action: request.action,
+            status: 'rejected',
+            resolved_at: new Date().toISOString(),
+            resolved_by: user.id
+          },
+          user_id: request.user_id,
+          is_read: false
+        });
+        
+      return { requestId: request.id };
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending_permission_requests'] });
       toast({
-        title: "Request approved",
-        description: "The permission request has been approved.",
+        title: 'Permission Rejected',
+        description: 'The permission request has been rejected.'
       });
-      queryClient.invalidateQueries({ queryKey: ["permission_requests"] });
     },
     onError: (error: Error) => {
       toast({
-        title: "Approval failed",
-        description: error.message || "Failed to approve permission request.",
-        variant: "destructive",
+        title: 'Rejection Failed',
+        description: error.message,
+        variant: 'destructive',
       });
-    },
+    }
   });
-
-  // Reject a permission request
-  const rejectRequest = useMutation({
-    mutationFn: async (requestId: string) => {
-      if (!user?.id) throw new Error("User not authenticated");
-      
-      // Get the request details
-      const { data: request, error: requestError } = await supabase
-        .from("admin_requests")
-        .select("*")
-        .eq("id", requestId)
-        .single();
-      
-      if (requestError) throw requestError;
-      
-      // Update request status
-      const { error: updateError } = await supabase
-        .from("admin_requests")
-        .update({ 
-          status: "rejected",
-          resolved_at: new Date().toISOString(),
-          resolved_by: user.id
-        })
-        .eq("id", requestId);
-      
-      if (updateError) throw updateError;
-      
-      // Notify the user
-      await supabase.from("notifications").insert({
-        type: "permission_request_resolved",
-        content: JSON.stringify({
-          request_id: requestId,
-          action: request.action,
-          status: "rejected",
-          resolved_by: user.email,
-          resolved_at: new Date().toISOString()
-        }),
-        user_id: request.user_id
-      });
-    },
-    onSuccess: () => {
-      toast({
-        title: "Request rejected",
-        description: "The permission request has been rejected.",
-      });
-      queryClient.invalidateQueries({ queryKey: ["permission_requests"] });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Rejection failed",
-        description: error.message || "Failed to reject permission request.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Check if user has a pending request for a specific action
-  const hasPendingRequest = (action: PermissionAction): boolean => {
-    if (!userRequests) return false;
-    
-    return userRequests.some(
-      (req) => req.action === action && req.status === "pending"
-    );
-  };
-
+  
   return {
-    userRequests,
-    allRequests,
-    userRequestsLoading,
-    allRequestsLoading,
+    myPermissionRequests: {
+      data: myPermissionRequests.data || [],
+      isLoading: myPermissionRequests.isLoading,
+      error: myPermissionRequests.error
+    },
+    pendingPermissionRequests: {
+      data: pendingPermissionRequests.data || [],
+      isLoading: pendingPermissionRequests.isLoading,
+      error: pendingPermissionRequests.error
+    },
     requestPermission,
-    approveRequest,
-    rejectRequest,
-    hasPendingRequest,
+    approvePermissionRequest,
+    rejectPermissionRequest
   };
 }

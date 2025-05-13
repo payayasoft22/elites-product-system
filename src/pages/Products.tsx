@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -232,7 +231,7 @@ const Products = () => {
           toast({
             title: "Warning",
             description: "Product details updated, but you don't have permission to update the price.",
-            variant: "warning",
+            variant: "default",  // Changed from "warning" to "default"
           });
         } else {
           const { error: priceError } = await supabase
@@ -530,6 +529,7 @@ const Products = () => {
     setCurrentPage(1);
   }, [searchQuery]);
 
+  
   return (
     <DashboardLayout>
       <div className="space-y-6">
