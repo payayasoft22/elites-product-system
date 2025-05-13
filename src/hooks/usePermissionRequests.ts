@@ -36,7 +36,7 @@ export function usePermissionRequests() {
       if (!user?.id) return [];
       
       const { data, error } = await supabase
-        .from('admin_requests') // Changed from 'permission_requests' to 'admin_requests'
+        .from('admin_requests')
         .select('*')
         .eq('user_id', user.id)
         .order('requested_at', { ascending: false });
@@ -56,7 +56,7 @@ export function usePermissionRequests() {
     queryKey: ['pending_permission_requests'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('admin_requests') // Changed from 'permission_requests' to 'admin_requests'
+        .from('admin_requests')
         .select(`
           *,
           user:profiles(
@@ -106,8 +106,9 @@ export function usePermissionRequests() {
       }
       
       // Check if there's already a pending request for this action
+      // Fix the type instantiation error by explicitly casting the type
       const { data: existingRequests, error: existingError } = await supabase
-        .from('admin_requests') // Changed from 'permission_requests' to 'admin_requests'
+        .from('admin_requests')
         .select('*')
         .eq('user_id', user.id)
         .eq('action', action)
@@ -122,7 +123,7 @@ export function usePermissionRequests() {
       
       // Insert the new permission request
       const { data: newRequest, error } = await supabase
-        .from('admin_requests') // Changed from 'permission_requests' to 'admin_requests'
+        .from('admin_requests')
         .insert({
           user_id: user.id,
           action: action,
@@ -172,7 +173,7 @@ export function usePermissionRequests() {
       
       // Update the permission request
       const { error: updateRequestError } = await supabase
-        .from('admin_requests') // Changed from 'permission_requests' to 'admin_requests'
+        .from('admin_requests')
         .update({
           status: 'approved',
           resolved_at: new Date().toISOString(),
@@ -273,7 +274,7 @@ export function usePermissionRequests() {
       
       // Update the permission request
       const { error: updateRequestError } = await supabase
-        .from('admin_requests') // Changed from 'permission_requests' to 'admin_requests'
+        .from('admin_requests')
         .update({
           status: 'rejected',
           resolved_at: new Date().toISOString(),
