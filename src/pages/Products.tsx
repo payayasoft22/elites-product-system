@@ -1,58 +1,94 @@
-import React, { useState, useEffect } from "react";
+
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { useToast } from "@/components/ui/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import * as z from "zod";
-
-// Import the extracted components
-import ProductList from "@/components/products/ProductList";
-import ProductForm, { formSchema } from "@/components/products/ProductForm";
-import PriceHistorySheet from "@/components/products/PriceHistorySheet";
-import PriceForm, { priceHistorySchema } from "@/components/products/PriceForm";
-import DeleteConfirmDialog from "@/components/products/DeleteConfirmDialog";
-import { Product, PriceHistory } from "@/components/products/types";
-import { usePermission } from "@/hooks/usePermission";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
+import * as z from "zod";
+
+// Import refactored hooks and components
+import { useProductData } from "@/features/products/useProductData";
+import { useProductActions } from "@/features/products/useProductActions";
+import { usePermissionCheck } from "@/features/products/usePermissionCheck";
+
+// Import the original components
+import ProductList from "@/components/products/ProductList";
+import ProductForm from "@/components/products/ProductForm";
+import PriceHistorySheet from "@/components/products/PriceHistorySheet";
+import PriceForm from "@/components/products/PriceForm";
+import DeleteConfirmDialog from "@/components/products/DeleteConfirmDialog";
+import { useToast } from "@/hooks/use-toast";
 
 const Products = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { can, isAdmin, isLoading: permissionsLoading } = usePermission();
   
-  // State variables
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  // Custom hooks
+  const { 
+    products, 
+    loading, 
+    error, 
+    priceHistory, 
+    fetchProducts, 
+    fetchPriceHistory 
+  } = useProductData();
+  
+  const {
+    isAddProductOpen,
+    setIsAddProductOpen,
+    isEditProductOpen,
+    setIsEditProductOpen,
+    isDeleteConfirmOpen,
+    setIsDeleteConfirmOpen,
+    selectedProduct,
+    isPriceHistorySheetOpen,
+    setIsPriceHistorySheetOpen,
+    isAddPriceOpen,
+    setIsAddPriceOpen,
+    isEditPriceOpen,
+    setIsEditPriceOpen,
+    isDeletePriceOpen,
+    setIsDeletePriceOpen,
+    selectedPrice,
+    tempProduct,
+    setTempProduct,
+    
+    onSubmit,
+    onEdit,
+    onDelete,
+    onSubmitPrice,
+    onEditPrice,
+    onDeletePrice,
+    handleAddProduct: baseHandleAddProduct,
+    handleEditProduct: baseHandleEditProduct,
+    handleDeleteProduct: baseHandleDeleteProduct,
+    handleManagePriceHistory: baseHandleManagePriceHistory,
+    handleAddPrice: baseHandleAddPrice,
+    handleEditPrice: baseHandleEditPrice,
+    handleDeletePrice: baseHandleDeletePrice
+  } = useProductActions(fetchProducts);
+
+  const {
+    canAddProduct,
+    canEditProduct,
+    canDeleteProduct,
+    canAddPriceHistory,
+    canEditPriceHistory,
+    canDeletePriceHistory,
+    isAdmin,
+    permissionsLoading
+  } = usePermissionCheck();
+  
+  // State for pagination and search
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [isAddProductOpen, setIsAddProductOpen] = useState<boolean>(false);
-  const [isEditProductOpen, setIsEditProductOpen] = useState<boolean>(false);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState<boolean>(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [isPriceHistorySheetOpen, setIsPriceHistorySheetOpen] = useState<boolean>(false);
-  const [priceHistory, setPriceHistory] = useState<PriceHistory[]>([]);
-  const [isAddPriceOpen, setIsAddPriceOpen] = useState<boolean>(false);
-  const [isEditPriceOpen, setIsEditPriceOpen] = useState<boolean>(false);
-  const [isDeletePriceOpen, setIsDeletePriceOpen] = useState<boolean>(false);
-  const [selectedPrice, setSelectedPrice] = useState<PriceHistory | null>(null);
-  const [tempProduct, setTempProduct] = useState<Product | null>(null);
   const itemsPerPage = 10;
 
-  // Permission based state
-  const canAddProduct = isAdmin || can("add_product");
-  const canEditProduct = isAdmin || can("edit_product");
-  const canDeleteProduct = isAdmin || can("delete_product");
-  const canAddPriceHistory = isAdmin || can("add_price_history");
-  const canEditPriceHistory = isAdmin || can("edit_price_history");
-  const canDeletePriceHistory = isAdmin || can("delete_price_history");
-
-  // Event handlers
+  // Event handlers with permission checks
   const handleAddProduct = () => {
     if (!canAddProduct) {
       toast({
@@ -62,18 +98,10 @@ const Products = () => {
       });
       return;
     }
-    
-    const tempProd: Product = {
-      prodcode: "",
-      description: "",
-      unit: "",
-      currentPrice: 0
-    };
-    setTempProduct(tempProd);
-    setIsAddProductOpen(true);
+    baseHandleAddProduct();
   };
 
-  const handleEditProduct = (product: Product) => {
+  const handleEditProduct = (product: any) => {
     if (!canEditProduct) {
       toast({
         title: "Permission Denied",
@@ -82,12 +110,10 @@ const Products = () => {
       });
       return;
     }
-    
-    setSelectedProduct(product);
-    setIsEditProductOpen(true);
+    baseHandleEditProduct(product);
   };
 
-  const handleDeleteProduct = (product: Product) => {
+  const handleDeleteProduct = (product: any) => {
     if (!canDeleteProduct) {
       toast({
         title: "Permission Denied",
@@ -96,19 +122,11 @@ const Products = () => {
       });
       return;
     }
-    
-    setSelectedProduct(product);
-    setIsDeleteConfirmOpen(true);
+    baseHandleDeleteProduct(product);
   };
 
   const handleManagePriceHistory = () => {
-    if (!tempProduct) return;
-    
-    if (tempProduct.prodcode) {
-      fetchPriceHistory(tempProduct.prodcode);
-    }
-    
-    setIsPriceHistorySheetOpen(true);
+    baseHandleManagePriceHistory(fetchPriceHistory);
   };
 
   const handleAddPrice = () => {
@@ -120,11 +138,10 @@ const Products = () => {
       });
       return;
     }
-    
-    setIsAddPriceOpen(true);
+    baseHandleAddPrice();
   };
 
-  const handleEditPrice = (price: PriceHistory) => {
+  const handleEditPrice = (price: any) => {
     if (!canEditPriceHistory) {
       toast({
         title: "Permission Denied",
@@ -133,12 +150,10 @@ const Products = () => {
       });
       return;
     }
-    
-    setSelectedPrice(price);
-    setIsEditPriceOpen(true);
+    baseHandleEditPrice(price);
   };
 
-  const handleDeletePrice = (price: PriceHistory) => {
+  const handleDeletePrice = (price: any) => {
     if (!canDeletePriceHistory) {
       toast({
         title: "Permission Denied",
@@ -147,388 +162,13 @@ const Products = () => {
       });
       return;
     }
-    
-    setSelectedPrice(price);
-    setIsDeletePriceOpen(true);
+    baseHandleDeletePrice(price);
   };
 
-  // CRUD operations
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (!canAddProduct) {
-      toast({
-        title: "Permission Denied",
-        description: "You don't have permission to add products.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    try {
-      const { error: productError } = await supabase
-        .from('product')
-        .insert({
-          prodcode: values.prodcode,
-          description: values.description,
-          unit: values.unit
-        });
-
-      if (productError) throw productError;
-
-      const { error: priceError } = await supabase
-        .from('pricehist')
-        .insert({
-          prodcode: values.prodcode,
-          unitprice: values.unitprice,
-          effdate: new Date().toISOString().split('T')[0]
-        });
-
-      if (priceError) throw priceError;
-
-      toast({
-        title: "Product added successfully",
-        description: `${values.prodcode} has been added to your products.`
-      });
-
-      setIsAddProductOpen(false);
-      setTempProduct(null);
-      setIsPriceHistorySheetOpen(false);
-      setPriceHistory([]);
-
-      fetchProducts();
-    } catch (err: any) {
-      console.error('Error adding product:', err);
-      toast({
-        title: "Error adding product",
-        description: err.message || "Failed to add product. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const onEdit = async (values: z.infer<typeof formSchema>) => {
-    if (!canEditProduct || !selectedProduct) {
-      toast({
-        title: "Permission Denied",
-        description: "You don't have permission to edit products.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    try {
-      const { error: productError } = await supabase
-        .from('product')
-        .update({
-          description: values.description,
-          unit: values.unit
-        })
-        .eq('prodcode', selectedProduct.prodcode);
-
-      if (productError) throw productError;
-
-      if (values.unitprice !== selectedProduct.currentPrice) {
-        if (!canAddPriceHistory) {
-          toast({
-            title: "Warning",
-            description: "Product details updated, but you don't have permission to update the price.",
-            variant: "default",  // Changed from "warning" to "default"
-          });
-        } else {
-          const { error: priceError } = await supabase
-            .from('pricehist')
-            .insert({
-              prodcode: selectedProduct.prodcode,
-              unitprice: values.unitprice,
-              effdate: new Date().toISOString().split('T')[0]
-            });
-
-          if (priceError) throw priceError;
-        }
-      }
-
-      toast({
-        title: "Product updated successfully",
-        description: `${selectedProduct.prodcode} has been updated.`
-      });
-
-      setIsEditProductOpen(false);
-      setSelectedProduct(null);
-
-      fetchProducts();
-    } catch (err: any) {
-      console.error('Error updating product:', err);
-      toast({
-        title: "Error updating product",
-        description: err.message || "Failed to update product. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const onDelete = async () => {
-    if (!canDeleteProduct || !selectedProduct) {
-      toast({
-        title: "Permission Denied",
-        description: "You don't have permission to delete products.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    try {
-      const { error: priceHistError } = await supabase
-        .from('pricehist')
-        .delete()
-        .eq('prodcode', selectedProduct.prodcode);
-
-      if (priceHistError) throw priceHistError;
-
-      const { error: productError } = await supabase
-        .from('product')
-        .delete()
-        .eq('prodcode', selectedProduct.prodcode);
-
-      if (productError) throw productError;
-
-      toast({
-        title: "Product deleted successfully",
-        description: `${selectedProduct.prodcode} has been removed from your products.`
-      });
-
-      setIsDeleteConfirmOpen(false);
-      setSelectedProduct(null);
-
-      fetchProducts();
-    } catch (err: any) {
-      console.error('Error deleting product:', err);
-      toast({
-        title: "Error deleting product",
-        description: err.message || "Failed to delete product. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Data fetching
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const { data: productsData, error: productsError } = await supabase
-        .from('product')
-        .select('*')
-        .order('prodcode', { ascending: true }); // Ensure alphabetical order by product code
-
-      if (productsError) throw productsError;
-
-      if (productsData) {
-        const productsWithPrices = await Promise.all(
-          productsData.map(async (product) => {
-            const { data: priceData, error: priceError } = await supabase
-              .from('pricehist')
-              .select('unitprice, effdate')
-              .eq('prodcode', product.prodcode)
-              .order('effdate', { ascending: false })
-              .limit(1);
-
-            if (priceError) {
-              console.error(`Error fetching price for ${product.prodcode}:`, priceError);
-              return {
-                ...product,
-                currentPrice: null
-              };
-            }
-
-            return {
-              ...product,
-              currentPrice: priceData && priceData.length > 0 ? priceData[0].unitprice : null
-            };
-          })
-        );
-
-        setProducts(productsWithPrices);
-      }
-    } catch (err: any) {
-      console.error('Error fetching products:', err);
-      setError(err.message);
-      toast({
-        title: "Error",
-        description: "Failed to load products. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchPriceHistory = async (prodcode: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('pricehist')
-        .select('*')
-        .eq('prodcode', prodcode)
-        .order('effdate', { ascending: false });
-
-      if (error) throw error;
-      
-      setPriceHistory(data || []);
-    } catch (err: any) {
-      console.error('Error fetching price history:', err);
-      toast({
-        title: "Error",
-        description: "Failed to load price history. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const onSubmitPrice = async (values: z.infer<typeof priceHistorySchema>) => {
-    if (!canAddPriceHistory || !tempProduct) {
-      toast({
-        title: "Permission Denied",
-        description: "You don't have permission to add price history.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    try {
-      const { error } = await supabase
-        .from('pricehist')
-        .insert({
-          prodcode: tempProduct.prodcode,
-          unitprice: values.unitprice,
-          effdate: values.effdate
-        });
-
-      if (error) throw error;
-
-      toast({
-        title: "Price history added",
-        description: "New price has been added successfully."
-      });
-      
-      fetchPriceHistory(tempProduct.prodcode);
-      
-      setTempProduct({
-        ...tempProduct,
-        currentPrice: values.unitprice
-      });
-      
-      setIsAddPriceOpen(false);
-    } catch (err: any) {
-      console.error('Error adding price history:', err);
-      toast({
-        title: "Error adding price",
-        description: err.message || "Failed to add price. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const onEditPrice = async (values: z.infer<typeof priceHistorySchema>) => {
-    if (!canEditPriceHistory || !selectedPrice || !tempProduct) {
-      toast({
-        title: "Permission Denied",
-        description: "You don't have permission to edit price history.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    try {
-      const { error } = await supabase
-        .from('pricehist')
-        .update({
-          unitprice: values.unitprice,
-          effdate: values.effdate
-        })
-        .eq('prodcode', selectedPrice.prodcode)
-        .eq('effdate', selectedPrice.effdate);
-
-      if (error) throw error;
-
-      toast({
-        title: "Price history updated",
-        description: "Price has been updated successfully."
-      });
-      
-      fetchPriceHistory(tempProduct.prodcode);
-      
-      if (priceHistory.length > 0 && priceHistory[0].effdate === selectedPrice.effdate) {
-        setTempProduct({
-          ...tempProduct,
-          currentPrice: values.unitprice
-        });
-      }
-      
-      setIsEditPriceOpen(false);
-      setSelectedPrice(null);
-    } catch (err: any) {
-      console.error('Error updating price history:', err);
-      toast({
-        title: "Error updating price",
-        description: err.message || "Failed to update price. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const onDeletePrice = async () => {
-    if (!canDeletePriceHistory || !selectedPrice || !tempProduct) {
-      toast({
-        title: "Permission Denied",
-        description: "You don't have permission to delete price history.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    try {
-      const { error } = await supabase
-        .from('pricehist')
-        .delete()
-        .eq('prodcode', selectedPrice.prodcode)
-        .eq('effdate', selectedPrice.effdate);
-
-      if (error) throw error;
-
-      toast({
-        title: "Price history deleted",
-        description: "Price has been deleted successfully."
-      });
-      
-      fetchPriceHistory(tempProduct.prodcode);
-      
-      if (priceHistory.length > 0 && priceHistory[0].effdate === selectedPrice.effdate) {
-        const newCurrentPrice = priceHistory.length > 1 ? priceHistory[1].unitprice : 0;
-        
-        setTempProduct({
-          ...tempProduct,
-          currentPrice: newCurrentPrice
-        });
-      }
-      
-      setIsDeletePriceOpen(false);
-      setSelectedPrice(null);
-    } catch (err: any) {
-      console.error('Error deleting price history:', err);
-      toast({
-        title: "Error deleting price",
-        description: err.message || "Failed to delete price. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Effects
-  useEffect(() => {
-    fetchProducts();
-  }, [toast]);
-
-  useEffect(() => {
+  // Effects to handle pagination when search changes
+  React.useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery]);
-
   
   return (
     <DashboardLayout>
@@ -583,7 +223,6 @@ const Products = () => {
         if (!open) {
           setTempProduct(null);
           setIsPriceHistorySheetOpen(false);
-          setPriceHistory([]);
         }
       }}>
         <DialogContent className="sm:max-w-[425px]">
@@ -654,7 +293,7 @@ const Products = () => {
             </DialogDescription>
           </DialogHeader>
           <PriceForm
-            onSubmit={onSubmitPrice}
+            onSubmit={(values) => onSubmitPrice(values, fetchPriceHistory)}
             onCancel={() => setIsAddPriceOpen(false)}
           />
         </DialogContent>
@@ -670,7 +309,7 @@ const Products = () => {
             </DialogDescription>
           </DialogHeader>
           <PriceForm
-            onSubmit={onEditPrice}
+            onSubmit={(values) => onEditPrice(values, fetchPriceHistory, priceHistory)}
             isEdit={true}
             initialPrice={selectedPrice?.unitprice || 0}
             initialDate={selectedPrice?.effdate || ""}
@@ -688,7 +327,7 @@ const Products = () => {
           <DeleteConfirmDialog
             itemType="Price"
             itemName={`for ${tempProduct?.prodcode || ""} on ${selectedPrice ? new Date(selectedPrice.effdate).toLocaleDateString() : ""}`}
-            onDelete={onDeletePrice}
+            onDelete={() => onDeletePrice(fetchPriceHistory, priceHistory)}
             onCancel={() => setIsDeletePriceOpen(false)}
           />
         </DialogContent>
