@@ -46,7 +46,8 @@ export function usePermissionRequests() {
         throw error;
       }
       
-      return data as PermissionRequest[];
+      // Cast the data to the correct type
+      return (data || []) as unknown as PermissionRequest[];
     },
     enabled: !!user,
   });
@@ -73,7 +74,8 @@ export function usePermissionRequests() {
         throw error;
       }
       
-      return data as PermissionRequest[];
+      // Cast the data with unknown first to avoid type errors
+      return (data || []) as unknown as PermissionRequest[];
     },
     enabled: !!user,
   });
@@ -106,14 +108,14 @@ export function usePermissionRequests() {
       }
       
       // Check if there's already a pending request for this action
-      // Using a simpler approach to fix type issues
+      // Using type assertion to fix the type issues
       const { data: existingRequests, error: existingError } = await supabase
         .from('admin_requests')
         .select('*')
         .eq('user_id', user.id)
         .eq('action', action)
         .eq('status', 'pending')
-        .limit(1) as { data: any[], error: any };
+        .limit(1);
         
       if (existingError) throw existingError;
       

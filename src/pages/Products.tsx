@@ -532,8 +532,8 @@ const Products = () => {
   
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="space-y-6 w-full">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h2 className="text-3xl font-bold tracking-tight">Products</h2>
             <p className="text-muted-foreground">Manage your product catalog and pricing history.</p>
