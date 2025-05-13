@@ -3,10 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase, PermissionAction } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { Database } from '@/integrations/supabase/types';
 
+// Define types to match with the database schema
 interface PermissionRequest {
   id: string;
-  action: string; // This was missing in the interface
+  action: PermissionAction; 
   user_id: string;
   requested_at: string;
   resolved_at: string | null;
@@ -18,6 +20,9 @@ interface PermissionRequest {
     first_name: string;
   };
 }
+
+// Type for the user role from the database
+type UserRole = Database['public']['Enums']['user_role'];
 
 export function usePermissionRequests() {
   const { user } = useAuth();
@@ -31,7 +36,7 @@ export function usePermissionRequests() {
       if (!user?.id) return [];
       
       const { data, error } = await supabase
-        .from('permission_requests')
+        .from('admin_requests') // Changed from 'permission_requests' to 'admin_requests'
         .select('*')
         .eq('user_id', user.id)
         .order('requested_at', { ascending: false });
@@ -41,7 +46,7 @@ export function usePermissionRequests() {
         throw error;
       }
       
-      return data as PermissionRequest[];
+      return data as unknown as PermissionRequest[];
     },
     enabled: !!user,
   });
@@ -51,10 +56,10 @@ export function usePermissionRequests() {
     queryKey: ['pending_permission_requests'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('permission_requests')
+        .from('admin_requests') // Changed from 'permission_requests' to 'admin_requests'
         .select(`
           *,
-          user:user_id (
+          user:profiles(
             email,
             name,
             first_name
@@ -68,7 +73,7 @@ export function usePermissionRequests() {
         throw error;
       }
       
-      return data as PermissionRequest[];
+      return data as unknown as PermissionRequest[];
     },
     enabled: !!user,
   });
@@ -87,7 +92,7 @@ export function usePermissionRequests() {
         
       if (roleError) throw roleError;
       
-      const userRole = roleData?.role;
+      const userRole = roleData?.role as UserRole;
       
       const { data: permissionData, error: permissionError } = await supabase
         .from('role_permissions')
@@ -102,7 +107,7 @@ export function usePermissionRequests() {
       
       // Check if there's already a pending request for this action
       const { data: existingRequests, error: existingError } = await supabase
-        .from('permission_requests')
+        .from('admin_requests') // Changed from 'permission_requests' to 'admin_requests'
         .select('*')
         .eq('user_id', user.id)
         .eq('action', action)
@@ -117,7 +122,7 @@ export function usePermissionRequests() {
       
       // Insert the new permission request
       const { data: newRequest, error } = await supabase
-        .from('permission_requests')
+        .from('admin_requests') // Changed from 'permission_requests' to 'admin_requests'
         .insert({
           user_id: user.id,
           action: action,
@@ -167,7 +172,7 @@ export function usePermissionRequests() {
       
       // Update the permission request
       const { error: updateRequestError } = await supabase
-        .from('permission_requests')
+        .from('admin_requests') // Changed from 'permission_requests' to 'admin_requests'
         .update({
           status: 'approved',
           resolved_at: new Date().toISOString(),
@@ -186,14 +191,14 @@ export function usePermissionRequests() {
         
       if (userError) throw userError;
       
-      const userRole = userData?.role;
+      const userRole = userData?.role as UserRole;
       
       // Check if the role_permission record exists
       const { data: existingPermission, error: existingError } = await supabase
         .from('role_permissions')
         .select('*')
         .eq('role', userRole)
-        .eq('action', request.action)
+        .eq('action', request.action as PermissionAction)
         .limit(1);
         
       if (existingError) throw existingError;
@@ -208,7 +213,7 @@ export function usePermissionRequests() {
             allowed: true
           })
           .eq('role', userRole)
-          .eq('action', request.action);
+          .eq('action', request.action as PermissionAction);
           
         if (permissionError) throw permissionError;
         
@@ -219,7 +224,7 @@ export function usePermissionRequests() {
           .from('role_permissions')
           .insert({
             role: userRole,
-            action: request.action,
+            action: request.action as PermissionAction,
             allowed: true
           });
           
@@ -268,7 +273,7 @@ export function usePermissionRequests() {
       
       // Update the permission request
       const { error: updateRequestError } = await supabase
-        .from('permission_requests')
+        .from('admin_requests') // Changed from 'permission_requests' to 'admin_requests'
         .update({
           status: 'rejected',
           resolved_at: new Date().toISOString(),
