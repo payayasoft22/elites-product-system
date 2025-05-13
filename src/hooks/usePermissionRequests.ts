@@ -106,7 +106,9 @@ export function usePermissionRequests() {
       }
       
       // Check if there's already a pending request for this action
-      // Fix the type instantiation error by explicitly casting the type
+      // Fix the type instantiation error by using explicit type casting
+      type AdminRequestsResponse = Awaited<ReturnType<typeof supabase.from<'admin_requests'>>['select']>['data'];
+      
       const { data: existingRequests, error: existingError } = await supabase
         .from('admin_requests')
         .select('*')
