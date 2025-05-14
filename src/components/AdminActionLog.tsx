@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -190,13 +189,13 @@ const AdminActionLog = () => {
       // Log this reversion as another action
       await supabase.from('notifications').insert({
         type: 'action_reverted',
-        content: {
+        content: JSON.stringify({
           reverted_action: action.action_type,
           reverted_id: action.id,
           original_changes: action.changes,
           reverted_by: user?.email,
           reverted_at: new Date().toISOString()
-        },
+        }),
         user_id: user?.id
       });
       

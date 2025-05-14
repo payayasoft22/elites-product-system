@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,10 +10,9 @@ import { PermissionAction } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, Check, X, Shield } from "lucide-react";
+import { AlertTriangle, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { usePermission } from "@/hooks/usePermission";
 
 // Define types for permissions data
 interface Permission {
@@ -45,7 +43,6 @@ const UserPermissions = () => {
   const [processingRequest, setProcessingRequest] = useState<string | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
-  const { isAdmin } = usePermission();
   
   // Group permissions by role for easier display
   const permissionsByRole = permissionsData.reduce((acc, permission) => {
@@ -126,15 +123,6 @@ const UserPermissions = () => {
   };
 
   const updatePermission = async (permission: Permission, allowed: boolean) => {
-    if (!isAdmin) {
-      toast({
-        title: 'Permission Denied',
-        description: 'Only administrators can update permissions.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    
     try {
       // Make a type-safe update by explicitly defining the role type
       const roleValue: "user" | "admin" = permission.role as "user" | "admin";
@@ -248,14 +236,7 @@ const UserPermissions = () => {
   };
   
   const handleRequestAction = async (requestId: string, status: 'approved' | 'rejected') => {
-    if (!user || !isAdmin) {
-      toast({
-        title: 'Permission Denied',
-        description: 'Only administrators can approve or reject requests.',
-        variant: 'destructive',
-      });
-      return;
-    }
+    if (!user) return;
     
     try {
       setProcessingRequest(requestId);
@@ -329,7 +310,7 @@ const UserPermissions = () => {
   return (
     <DashboardLayout>
       <Helmet>
-        <title>User Permissions | Elites Project Management</title>
+        <title>User Permissions | Elites Product Management</title>
       </Helmet>
       
       <div className="space-y-6">
@@ -340,30 +321,17 @@ const UserPermissions = () => {
           </p>
         </div>
 
-        {!isAdmin && (
-          <Alert>
-            <Shield className="h-4 w-4" />
-            <AlertTitle>User Permissions View</AlertTitle>
-            <AlertDescription>
-              You are viewing the permissions dashboard as a regular user. You can request additional permissions, 
-              but only administrators can manage role-based permissions.
-            </AlertDescription>
-          </Alert>
-        )}
-
         <Tabs defaultValue="permissions">
           <TabsList className="mb-4">
             <TabsTrigger value="permissions">Permissions</TabsTrigger>
-            {isAdmin && (
-              <TabsTrigger value="requests">
-                Permission Requests
-                {permissionRequests.filter(req => req.status === 'pending').length > 0 && (
-                  <Badge variant="destructive" className="ml-2">
-                    {permissionRequests.filter(req => req.status === 'pending').length}
-                  </Badge>
-                )}
-              </TabsTrigger>
-            )}
+            <TabsTrigger value="requests">
+              Permission Requests
+              {permissionRequests.filter(req => req.status === 'pending').length > 0 && (
+                <Badge variant="destructive" className="ml-2">
+                  {permissionRequests.filter(req => req.status === 'pending').length}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
           
           <TabsContent value="permissions" className="space-y-4">
@@ -391,7 +359,7 @@ const UserPermissions = () => {
                             <Switch
                               checked={permission.allowed}
                               onCheckedChange={(checked) => updatePermission(permission, checked)}
-                              disabled={!isAdmin}
+                              disabled={role === 'user' && !user}
                             />
                           </li>
                         ))}
@@ -402,7 +370,7 @@ const UserPermissions = () => {
               </div>
             )}
             
-            {!loading && user && !isAdmin && (
+            {!loading && user && (
               <Card>
                 <CardHeader>
                   <CardTitle>Request Permissions</CardTitle>
@@ -474,108 +442,106 @@ const UserPermissions = () => {
             )}
           </TabsContent>
           
-          {isAdmin && (
-            <TabsContent value="requests">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Permission Requests</CardTitle>
-                  <CardDescription>
-                    Review and manage user requests for additional permissions
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {permissionRequests.length === 0 ? (
-                    <div className="text-center p-6 text-muted-foreground">
-                      No permission requests found
-                    </div>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>User</TableHead>
-                          <TableHead>Permission</TableHead>
-                          <TableHead>Requested</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {permissionRequests.map((request) => {
-                          const isPending = request.status === 'pending';
-                          return (
-                            <TableRow key={request.id}>
-                              <TableCell>
-                                <div>
-                                  <div className="font-medium">{request.user_name}</div>
-                                  <div className="text-sm text-muted-foreground">{request.user_email}</div>
+          <TabsContent value="requests">
+            <Card>
+              <CardHeader>
+                <CardTitle>Permission Requests</CardTitle>
+                <CardDescription>
+                  Review and manage user requests for additional permissions
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {permissionRequests.length === 0 ? (
+                  <div className="text-center p-6 text-muted-foreground">
+                    No permission requests found
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>User</TableHead>
+                        <TableHead>Permission</TableHead>
+                        <TableHead>Requested</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {permissionRequests.map((request) => {
+                        const isPending = request.status === 'pending';
+                        return (
+                          <TableRow key={request.id}>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{request.user_name}</div>
+                                <div className="text-sm text-muted-foreground">{request.user_email}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {request.action ? getActionDisplayName(request.action) : 'Unknown action'}
+                            </TableCell>
+                            <TableCell>
+                              {request.requested_at ? 
+                                new Date(request.requested_at).toLocaleDateString() : 
+                                new Date(request.created_at || '').toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              {request.status === 'pending' && (
+                                <Badge variant="outline" className="bg-yellow-50 text-yellow-800 border-yellow-300">
+                                  Pending
+                                </Badge>
+                              )}
+                              {request.status === 'approved' && (
+                                <Badge variant="outline" className="bg-green-50 text-green-800 border-green-300">
+                                  Approved
+                                </Badge>
+                              )}
+                              {request.status === 'rejected' && (
+                                <Badge variant="outline" className="bg-red-50 text-red-800 border-red-300">
+                                  Rejected
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {isPending ? (
+                                <div className="flex space-x-2">
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="border-green-500 text-green-700 hover:bg-green-50"
+                                    onClick={() => handleRequestAction(request.id, 'approved')}
+                                    disabled={processingRequest === request.id}
+                                  >
+                                    <Check className="mr-1 h-4 w-4" />
+                                    Approve
+                                  </Button>
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="border-red-500 text-red-700 hover:bg-red-50"
+                                    onClick={() => handleRequestAction(request.id, 'rejected')}
+                                    disabled={processingRequest === request.id}
+                                  >
+                                    <X className="mr-1 h-4 w-4" />
+                                    Reject
+                                  </Button>
                                 </div>
-                              </TableCell>
-                              <TableCell>
-                                {request.action ? getActionDisplayName(request.action) : 'Unknown action'}
-                              </TableCell>
-                              <TableCell>
-                                {request.requested_at ? 
-                                  new Date(request.requested_at).toLocaleDateString() : 
-                                  new Date(request.created_at || '').toLocaleDateString()}
-                              </TableCell>
-                              <TableCell>
-                                {request.status === 'pending' && (
-                                  <Badge variant="outline" className="bg-yellow-50 text-yellow-800 border-yellow-300">
-                                    Pending
-                                  </Badge>
-                                )}
-                                {request.status === 'approved' && (
-                                  <Badge variant="outline" className="bg-green-50 text-green-800 border-green-300">
-                                    Approved
-                                  </Badge>
-                                )}
-                                {request.status === 'rejected' && (
-                                  <Badge variant="outline" className="bg-red-50 text-red-800 border-red-300">
-                                    Rejected
-                                  </Badge>
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {isPending ? (
-                                  <div className="flex space-x-2">
-                                    <Button 
-                                      size="sm" 
-                                      variant="outline" 
-                                      className="border-green-500 text-green-700 hover:bg-green-50"
-                                      onClick={() => handleRequestAction(request.id, 'approved')}
-                                      disabled={processingRequest === request.id}
-                                    >
-                                      <Check className="mr-1 h-4 w-4" />
-                                      Approve
-                                    </Button>
-                                    <Button 
-                                      size="sm" 
-                                      variant="outline" 
-                                      className="border-red-500 text-red-700 hover:bg-red-50"
-                                      onClick={() => handleRequestAction(request.id, 'rejected')}
-                                      disabled={processingRequest === request.id}
-                                    >
-                                      <X className="mr-1 h-4 w-4" />
-                                      Reject
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <span className="text-sm text-muted-foreground">
-                                    {request.status === 'approved' ? 'Approved' : 'Rejected'} on{' '}
-                                    {request.resolved_at ? new Date(request.resolved_at).toLocaleDateString() : 'unknown date'}
-                                  </span>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          )}
+                              ) : (
+                                <span className="text-sm text-muted-foreground">
+                                  {request.status === 'approved' ? 'Approved' : 'Rejected'} on{' '}
+                                  {request.resolved_at ? new Date(request.resolved_at).toLocaleDateString() : 'unknown date'}
+                                </span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </div>
     </DashboardLayout>

@@ -2,6 +2,7 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from "react-helmet-async";
+import { SidebarProvider } from "@/contexts/SidebarContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { Toaster } from "@/components/ui/toaster";
 import FirstUserSetup from "@/components/FirstUserSetup";
@@ -31,64 +32,66 @@ function App() {
       <HelmetProvider>
         <Router>
           <AuthProvider>
-            <FirstUserSetup />
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<SignUp />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              
-              <Route 
-                path="/dashboard" 
-                element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/products" 
-                element={
-                  <ProtectedRoute>
-                    <Products />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/price-history" 
-                element={
-                  <ProtectedRoute>
-                    <PriceHistory />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/settings" 
-                element={
-                  <ProtectedRoute>
-                    <Settings />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/users" 
-                element={
-                  <ProtectedRoute>
-                    <Users />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/user-permissions" 
-                element={
-                  <ProtectedRoute>
-                    <UserPermissions />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-            <Toaster />
+            <SidebarProvider>
+              <FirstUserSetup />
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<SignUp />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                
+                <Route 
+                  path="/dashboard" 
+                  element={
+                    <ProtectedRoute>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/products" 
+                  element={
+                    <ProtectedRoute>
+                      <Products />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/price-history" 
+                  element={
+                    <ProtectedRoute>
+                      <PriceHistory />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/settings" 
+                  element={
+                    <ProtectedRoute>
+                      <Settings />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/users" 
+                  element={
+                    <ProtectedRoute>
+                      <Users />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/user-permissions" 
+                  element={
+                    <ProtectedRoute>
+                      <UserPermissions />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+              <Toaster />
+            </SidebarProvider>
           </AuthProvider>
         </Router>
       </HelmetProvider>

@@ -1,235 +1,262 @@
 
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { PermissionAction } from "@/integrations/supabase/client";
 
-interface PermissionRequest {
+export interface PermissionRequest {
   id: string;
   user_id: string;
-  requested_at: string;
-  resolved_at: string | null;
-  resolved_by: string | null;
-  status: 'pending' | 'approved' | 'rejected';
-  user?: {
-    id: string;
-    email: string;
-    first_name?: string;
-    name?: string;
-  };
-  resolver?: {
-    id: string;
-    email: string;
-    first_name?: string;
-    name?: string;
-  };
+  action?: PermissionAction;
+  status: "pending" | "approved" | "rejected";
+  requested_at?: string;
+  resolved_at?: string | null;
+  resolved_by?: string | null;
+  user_name?: string;
+  user_email?: string;
 }
 
-export const usePermissionRequests = () => {
+export function usePermissionRequests() {
   const { user } = useAuth();
-  const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [pendingAction, setPendingAction] = useState<{id: string, action: 'approve' | 'reject'} | null>(null);
+  const { toast } = useToast();
 
-  // Get my requests
-  const { data: myRequests, isLoading: isLoadingMyRequests } = useQuery({
-    queryKey: ['permissionRequests', 'my'],
+  // Get permission requests for the current user
+  const { data: userRequests, isLoading: userRequestsLoading } = useQuery({
+    queryKey: ["permission_requests", "user", user?.id],
     queryFn: async () => {
-      if (!user) return [];
-
+      if (!user?.id) return [];
+      
       const { data, error } = await supabase
-        .from('admin_requests')
-        .select(`
-          *
-        `)
-        .eq('user_id', user.id)
-        .order('requested_at', { ascending: false });
+        .from("admin_requests")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("requested_at", { ascending: false });
       
       if (error) {
-        console.error('Error fetching permission requests:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load your permission requests",
-          variant: "destructive",
-        });
+        console.error("Error fetching permission requests:", error);
         throw error;
       }
       
-      // Cast the data to the correct type
-      return (data || []) as unknown as PermissionRequest[];
+      return data as PermissionRequest[] || [];
     },
     enabled: !!user,
   });
 
-  // Get admin requests
-  const { data: pendingRequests, isLoading: isLoadingPendingRequests } = useQuery({
-    queryKey: ['permissionRequests', 'pending'],
+  // Get all permission requests (for admins)
+  const { data: allRequests, isLoading: allRequestsLoading } = useQuery({
+    queryKey: ["permission_requests", "all"],
     queryFn: async () => {
-      if (!user) return [];
-
       const { data, error } = await supabase
-        .from('admin_requests')
+        .from("admin_requests")
         .select(`
           *,
-          user:user_id (
-            id,
-            email,
-            first_name,
-            name
-          )
+          profiles(email, first_name, name)
         `)
-        .eq('status', 'pending')
-        .order('requested_at', { ascending: false });
-        
+        .order("requested_at", { ascending: false });
+      
       if (error) {
-        console.error('Error fetching pending requests:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load permission requests",
-          variant: "destructive",
-        });
+        console.error("Error fetching all permission requests:", error);
         throw error;
       }
       
-      // Cast the data with unknown first to avoid type errors
-      return (data || []) as unknown as PermissionRequest[];
+      // Transform data to include user details
+      return (data || []).map((item: any) => ({
+        ...item,
+        user_email: item.profiles?.email,
+        user_name: item.profiles?.first_name || item.profiles?.name || 'Unknown User'
+      })) as PermissionRequest[];
     },
     enabled: !!user,
   });
 
-  // Mutation to request admin privileges
-  const { mutate: requestAdminPrivileges, isPending: isRequestingAdmin } = useMutation({
-    mutationFn: async () => {
-      if (!user) throw new Error("User not authenticated");
+  // Request a permission
+  const requestPermission = useMutation({
+    mutationFn: async (action: PermissionAction) => {
+      if (!user?.id) throw new Error("User not authenticated");
       
-      // Define the action - required for type safety
-      const action = 'admin_access';
-      
-      if (!action) {
-        throw new Error('Action is required');
-      }
-      
-      // Using type assertion to fix the type issues
-      const { data: existingRequests, error: existingError } = await supabase
-        .from('admin_requests')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('status', 'pending');
-        
-      if (existingError) throw existingError;
-      
-      // Check for an existing pending request
-      if (existingRequests && existingRequests.length > 0) {
-        toast({
-          title: "Request already exists",
-          description: "You already have a pending request for admin access",
-          variant: "default",
-        });
-        return;
-      }
-      
-      // Create a new request
       const { error } = await supabase
-        .from('admin_requests')
+        .from("admin_requests")
         .insert([
           { 
-            user_id: user.id, 
-            status: 'pending',
+            user_id: user.id,
+            action: action,
+            status: "pending"
           }
         ]);
       
       if (error) throw error;
       
-      toast({
-        title: "Request submitted",
-        description: "Your request for admin privileges has been submitted",
-      });
+      // Notify admins
+      const { data: admins } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("role", "admin");
       
-      return true;
+      if (admins && admins.length > 0) {
+        const notifications = admins.map(admin => ({
+          type: "permission_request",
+          content: JSON.stringify({
+            action: action,
+            requested_by: user.email,
+            requested_at: new Date().toISOString()
+          }),
+          user_id: admin.id
+        }));
+        
+        await supabase.from("notifications").insert(notifications);
+      }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['permissionRequests'] });
-    },
-    onError: (error: any) => {
-      console.error('Error requesting admin privileges:', error);
       toast({
-        title: "Error",
-        description: error.message || "Failed to submit request",
+        title: "Request submitted",
+        description: "Your permission request has been submitted for approval.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["permission_requests"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Request failed",
+        description: error.message || "Failed to submit permission request.",
         variant: "destructive",
       });
-    }
+    },
   });
 
-  // Mutation to resolve a request (approve or reject)
-  const { mutate: resolveRequest, isPending: isResolvingRequest } = useMutation({
-    mutationFn: async ({ id, action }: { id: string, action: 'approve' | 'reject' }) => {
-      if (!user) throw new Error("User not authenticated");
+  // Approve a permission request
+  const approveRequest = useMutation({
+    mutationFn: async (requestId: string) => {
+      if (!user?.id) throw new Error("User not authenticated");
       
-      setPendingAction({ id, action });
+      // Get the request details
+      const { data: request, error: requestError } = await supabase
+        .from("admin_requests")
+        .select("*")
+        .eq("id", requestId)
+        .single();
       
-      const { error } = await supabase
-        .from('admin_requests')
+      if (requestError) throw requestError;
+      
+      // Update request status
+      const { error: updateError } = await supabase
+        .from("admin_requests")
         .update({ 
-          status: action === 'approve' ? 'approved' : 'rejected',
+          status: "approved",
           resolved_at: new Date().toISOString(),
           resolved_by: user.id
         })
-        .eq('id', id);
+        .eq("id", requestId);
       
-      if (error) throw error;
-
-      // If approved, update the user's role to admin
-      if (action === 'approve') {
-        const { data: requestData, error: requestError } = await supabase
-          .from('admin_requests')
-          .select('user_id')
-          .eq('id', id)
-          .single();
-          
-        if (requestError) throw requestError;
-        
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ role: 'admin' })
-          .eq('id', requestData.user_id);
-          
-        if (profileError) throw profileError;
+      if (updateError) throw updateError;
+      
+      // Ensure action exists before using it
+      if (request && 'action' in request) {
+        // Notify the user
+        await supabase.from("notifications").insert({
+          type: "permission_request_resolved",
+          content: JSON.stringify({
+            request_id: requestId,
+            action: request.action,
+            status: "approved",
+            resolved_by: user.email,
+            resolved_at: new Date().toISOString()
+          }),
+          user_id: request.user_id
+        });
       }
-      
-      toast({
-        title: action === 'approve' ? "Request approved" : "Request rejected",
-        description: action === 'approve' 
-          ? "The user has been granted admin privileges" 
-          : "The request has been rejected",
-      });
-      
-      return true;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['permissionRequests'] });
-      setPendingAction(null);
-    },
-    onError: (error: any) => {
-      console.error('Error resolving request:', error);
       toast({
-        title: "Error",
-        description: error.message || "Failed to process request",
+        title: "Request approved",
+        description: "The permission request has been approved.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["permission_requests"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Approval failed",
+        description: error.message || "Failed to approve permission request.",
         variant: "destructive",
       });
-      setPendingAction(null);
-    }
+    },
   });
 
-  return {
-    myRequests,
-    pendingRequests,
-    isLoadingMyRequests,
-    isLoadingPendingRequests,
-    requestAdminPrivileges,
-    isRequestingAdmin,
-    resolveRequest,
-    isResolvingRequest,
-    pendingAction
+  // Reject a permission request
+  const rejectRequest = useMutation({
+    mutationFn: async (requestId: string) => {
+      if (!user?.id) throw new Error("User not authenticated");
+      
+      // Get the request details
+      const { data: request, error: requestError } = await supabase
+        .from("admin_requests")
+        .select("*")
+        .eq("id", requestId)
+        .single();
+      
+      if (requestError) throw requestError;
+      
+      // Update request status
+      const { error: updateError } = await supabase
+        .from("admin_requests")
+        .update({ 
+          status: "rejected",
+          resolved_at: new Date().toISOString(),
+          resolved_by: user.id
+        })
+        .eq("id", requestId);
+      
+      if (updateError) throw updateError;
+      
+      // Ensure action exists before using it
+      if (request && 'action' in request) {
+        // Notify the user
+        await supabase.from("notifications").insert({
+          type: "permission_request_resolved",
+          content: JSON.stringify({
+            request_id: requestId,
+            action: request.action,
+            status: "rejected",
+            resolved_by: user.email,
+            resolved_at: new Date().toISOString()
+          }),
+          user_id: request.user_id
+        });
+      }
+    },
+    onSuccess: () => {
+      toast({
+        title: "Request rejected",
+        description: "The permission request has been rejected.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["permission_requests"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Rejection failed",
+        description: error.message || "Failed to reject permission request.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Check if user has a pending request for a specific action
+  const hasPendingRequest = (action: PermissionAction): boolean => {
+    if (!userRequests) return false;
+    
+    return userRequests.some(
+      (req: any) => req.action === action && req.status === "pending"
+    );
   };
-};
+
+  return {
+    userRequests,
+    allRequests,
+    userRequestsLoading,
+    allRequestsLoading,
+    requestPermission,
+    approveRequest,
+    rejectRequest,
+    hasPendingRequest,
+  };
+}
