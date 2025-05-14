@@ -37,7 +37,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (event === 'SIGNED_IN') {
           toast({
             title: "Signed in successfully",
-            description: "Welcome to Elites Project System!",
+            description: "Welcome back!",
           });
         } else if (event === 'SIGNED_OUT') {
           toast({
