@@ -72,20 +72,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
   
  const signup = async (email: string, password: string, name?: string) => {
+  setLoading(true);
   try {
     // 1. Create auth user
     const { data, error } = await supabase.auth.signUp({ 
       email, 
       password,
       options: {
-        data: { full_name: name },
+        data: { full_name: name || '' },
         emailRedirectTo: `${window.location.origin}/dashboard`
       }
     });
     
     if (error) throw error;
 
-    // 2. Create profile record
+    // 2. Check if user already exists
+    if (data.user?.identities?.length === 0) {
+      throw new Error("An account with this email already exists.");
+    }
+
+    // 3. Create profile record
     if (data.user) {
       const { error: profileError } = await supabase
         .from('profiles')
@@ -94,16 +100,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: data.user.email,
           display_name: name || data.user.email?.split('@')[0],
           role: 'user',
-          is_first_user: false // Will be updated by FirstUserSetup if needed
+          is_first_user: false
+        }, {
+          onConflict: 'id'
         });
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error("Profile creation error:", profileError);
+        throw new Error("Failed to create user profile.");
+      }
     }
 
-    return data;
-  } catch (error) {
-    console.error('Signup error:', error);
+    toast({
+      title: "Account created",
+      description: "Please check your email to confirm your account.",
+    });
+
+    if (data.session) {
+      navigate("/dashboard");
+    }
+  } catch (error: any) {
+    console.error("Signup error:", error);
+    let errorMessage = error.message;
+
+    // Handle specific Supabase errors
+    if (error.code === '23505') {
+      errorMessage = "This email is already registered.";
+    } else if (error.message.includes("permission denied")) {
+      errorMessage = "Permission denied. Please contact support.";
+    }
+
+    toast({
+      title: "Signup failed",
+      description: errorMessage || "Failed to create account.",
+      variant: "destructive",
+    });
     throw error;
+  } finally {
+    setLoading(false);
   }
 };
   
