@@ -95,21 +95,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // 3. Create user profile in public.users table
       if (data.user) {
-        const { error: profileError } = await supabase
-          .from('users')
-          .upsert({
-            uid: data.user.id,
-            email: data.user.email,
-            display_name: name || data.user.email?.split('@')[0],
-            phone: null,
-            providers: ['email'],
-            provider_type: 'email',
-            cross: false,
-            created_at: new Date().toISOString()
-          });
-
-        if (profileError) throw profileError;
-      }
+       const { error: profileError } = await supabase
+  .from('users')
+  .upsert({
+    uid: data.user.id,
+    email: data.user.email,
+    display_name: name || data.user.email?.split('@')[0],
+    phone: null,
+    providers: ['email'],
+    provider_type: 'email',
+    is_cross: false,  // Updated to match new column name
+    created_at: new Date().toISOString()
+  });
 
       toast({
         title: "Account created successfully",
