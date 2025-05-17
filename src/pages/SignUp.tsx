@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -23,7 +22,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 const signupSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters" }),
   email: z.string().email({ message: "Please enter a valid email address" }),
-  password: z.string().min(6, { message: "Password must be at least 6 characters" }),
+  password: z.string().min(6, { message: "Password must be at least 6 characters" })
+    .regex(/[A-Z]/, { message: "Password must contain at least one uppercase letter" })
+    .regex(/[0-9]/, { message: "Password must contain at least one number" }),
   confirmPassword: z.string().min(6, { message: "Password must be at least 6 characters" }),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
@@ -39,7 +40,6 @@ const SignUp = () => {
   const [signupError, setSignupError] = useState<string | null>(null);
   const navigate = useNavigate();
   
-  // Redirect to dashboard if already logged in
   useEffect(() => {
     if (isAuthenticated) {
       navigate('/dashboard');
@@ -60,9 +60,7 @@ const SignUp = () => {
     setSignupError(null);
     try {
       await signup(data.email, data.password, data.name);
-      // Navigation will be handled by the auth context when the user is set
     } catch (error: any) {
-      console.error("Signup error:", error);
       setSignupError(error.message || "Failed to create account. Please try again.");
     }
   };
@@ -95,10 +93,10 @@ const SignUp = () => {
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Name</FormLabel>
+                      <FormLabel>Full Name</FormLabel>
                       <FormControl>
                         <Input 
-                          placeholder="Your name" 
+                          placeholder="Your full name" 
                           type="text"
                           autoComplete="name"
                           {...field} 
@@ -137,7 +135,7 @@ const SignUp = () => {
                       <FormControl>
                         <div className="relative">
                           <Input
-                            placeholder="******"
+                            placeholder="At least 6 characters with 1 number"
                             type={showPassword ? "text" : "password"}
                             autoComplete="new-password"
                             {...field}
@@ -171,7 +169,7 @@ const SignUp = () => {
                       <FormControl>
                         <div className="relative">
                           <Input
-                            placeholder="******"
+                            placeholder="Re-enter your password"
                             type={showConfirmPassword ? "text" : "password"}
                             autoComplete="new-password"
                             {...field}
