@@ -71,7 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
   
- const signup = async (email: string, password: string, name?: string) => {
+const signup = async (email: string, password: string, name?: string) => {
   setLoading(true);
   try {
     // 1. Create auth user
