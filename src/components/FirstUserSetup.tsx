@@ -1,13 +1,8 @@
-
 import { useEffect } from 'react';
 import { supabase, PermissionAction } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
-/**
- * This component ensures the first user registered becomes an admin
- * It's designed to be used once during initial setup
- */
 const FirstUserSetup = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -22,23 +17,20 @@ const FirstUserSetup = () => {
           .from('profiles')
           .select('*', { count: 'exact', head: true });
 
-        if (countError) {
-          console.error('Error checking profile count:', countError);
-          return;
-        }
+        if (countError) throw countError;
 
-        // If only one user exists (this user), make them admin
-        if (count === 1) {
-          // Update user role to admin
+        // If no users exist yet, this is the first user
+        if (count === 0) {
+          // Update user as first user and admin
           const { error: updateError } = await supabase
             .from('profiles')
-            .update({ role: 'admin' })
+            .update({ 
+              role: 'admin',
+              is_first_user: true 
+            })
             .eq('id', user.id);
 
-          if (updateError) {
-            console.error('Error updating first user to admin:', updateError);
-            return;
-          }
+          if (updateError) throw updateError;
 
           // Define the permission actions
           const permissionActions: PermissionAction[] = [
@@ -50,40 +42,45 @@ const FirstUserSetup = () => {
             'edit_price_history'
           ];
 
-          // Insert initial permissions for admin role one by one
-          for (const action of permissionActions) {
-            await supabase
-              .from('role_permissions')
-              .upsert(
-                { role: 'admin', action, allowed: true },
-                { onConflict: 'role,action' }
-              );
-          }
+          // Batch insert permissions
+          const { error: permError } = await supabase
+            .from('role_permissions')
+            .upsert(
+              [
+                ...permissionActions.map(action => ({
+                  role: 'admin',
+                  action,
+                  allowed: true
+                })),
+                ...permissionActions.map(action => ({
+                  role: 'user',
+                  action,
+                  allowed: false
+                }))
+              ],
+              { onConflict: 'role,action' }
+            );
 
-          // Set default permissions for regular users one by one
-          for (const action of permissionActions) {
-            await supabase
-              .from('role_permissions')
-              .upsert(
-                { role: 'user', action, allowed: false },
-                { onConflict: 'role,action' }
-              );
-          }
+          if (permError) throw permError;
 
           toast({
             title: 'Admin Setup Complete',
-            description: 'As the first user, you have been granted admin privileges in the Elites Project System.',
+            description: 'As the first user, you have been granted admin privileges.',
           });
         }
       } catch (error) {
         console.error('Error in first user setup:', error);
+        toast({
+          title: 'Setup Error',
+          description: 'Failed to complete first user setup.',
+          variant: 'destructive'
+        });
       }
     };
 
     setupFirstUser();
   }, [user, toast]);
 
-  // This component doesn't render anything
   return null;
 };
 
