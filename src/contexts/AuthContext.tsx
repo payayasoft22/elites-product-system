@@ -71,67 +71,83 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
   
-const signup = async (email: string, password: string, name?: string) => {
-  setLoading(true);
-  try {
-    // Split full name into first/last names
-    const [firstName, ...lastNameParts] = (name || '').split(' ');
-    const lastName = lastNameParts.join(' ') || null;
+  const signup = async (email: string, password: string, name?: string) => {
+    setLoading(true);
+    try {
+      // Split name into first and last
+      const [firstName, ...lastNameParts] = (name || '').split(' ');
+      const lastName = lastNameParts.join(' ') || null;
+      const displayName = name || email.split('@')[0];
 
-    // 1. Create auth user
-    const { data, error } = await supabase.auth.signUp({ 
-      email, 
-      password,
-      options: {
-        data: {
-          first_name: firstName,
-          last_name: lastName,
-          full_name: name || ''
-        },
-        emailRedirectTo: `${window.location.origin}/dashboard`
+      // 1. Create auth user
+      const { data, error } = await supabase.auth.signUp({ 
+        email, 
+        password,
+        options: {
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+            full_name: name || displayName
+          },
+          emailRedirectTo: `${window.location.origin}/dashboard`
+        }
+      });
+      
+      if (error) throw error;
+
+      // 2. Check if user already exists
+      if (data.user?.identities?.length === 0) {
+        throw new Error("An account with this email already exists.");
       }
-    });
-    
-    if (error) throw error;
 
-    // 2. Create profile record
-    if (data.user) {
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({
-          id: data.user.id,
-          email: data.user.email,
-          first_name: firstName,
-          last_name: lastName,
-          display_name: name || data.user.email?.split('@')[0],
-          role: 'user',
-          is_first_user: false
-        }, {
-          onConflict: 'id'
-        });
+      // 3. Create profile record
+      if (data.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: data.user.id,
+            email: data.user.email,
+            first_name: firstName,
+            last_name: lastName,
+            display_name: displayName,
+            role: 'user',
+            is_first_user: false,
+            is_cross: false
+          }, {
+            onConflict: 'id'
+          });
 
-      if (profileError) throw profileError;
+        if (profileError) {
+          console.error("Profile error details:", profileError);
+          throw new Error("Failed to create user profile.");
+        }
+      }
+
+      toast({
+        title: "Account created",
+        description: "Please check your email to confirm your account.",
+      });
+      
+    } catch (error: any) {
+      console.error("Full signup error:", error);
+      let errorMessage = error.message;
+      
+      if (error.code === '23505') {
+        errorMessage = "This email is already registered. Please log in instead.";
+      } else if (error.message.includes("permission denied")) {
+        errorMessage = "Permission denied. Please contact support.";
+      }
+      
+      toast({
+        title: "Signup failed",
+        description: errorMessage || "Failed to create account. Please try again.",
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setLoading(false);
     }
-
-    toast({
-      title: "Account created",
-      description: "Please check your email to confirm your account.",
-    });
-
-    if (data.session) {
-      navigate("/dashboard");
-    }
-  } catch (error: any) {
-    console.error("Signup error:", error);
-    toast({
-      title: "Signup failed",
-      description: error.message || "Failed to create account.",
-      variant: "destructive",
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+  };
   
   const resetPassword = async (email: string) => {
     setLoading(true);
