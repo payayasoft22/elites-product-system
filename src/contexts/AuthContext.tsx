@@ -35,6 +35,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             title: "Signed in successfully",
             description: "Welcome to Elites Project System!",
           });
+          navigate("/dashboard");
         } else if (event === 'SIGNED_OUT') {
           toast({
             title: "Signed out",
@@ -51,14 +52,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     
     return () => subscription.unsubscribe();
-  }, [toast]);
+  }, [toast, navigate]);
   
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      navigate("/dashboard");
     } catch (error: any) {
       toast({
         title: "Login failed",
@@ -95,38 +95,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // 3. Create user profile in public.users table
       if (data.user) {
-       const { error: profileError } = await supabase
-  .from('users')
-  .upsert({
-    uid: data.user.id,
-    email: data.user.email,
-    display_name: name || data.user.email?.split('@')[0],
-    phone: null,
-    providers: ['email'],
-    provider_type: 'email',
-    is_cross: false,  // Updated to match new column name
-    created_at: new Date().toISOString()
-  });
+        const { error: profileError } = await supabase
+          .from('users')
+          .upsert({
+            uid: data.user.id,
+            email: data.user.email,
+            display_name: name || data.user.email?.split('@')[0],
+            phone: null,
+            providers: ['email'],
+            provider_type: 'email',
+            is_cross: false,
+            created_at: new Date().toISOString()
+          }, {
+            onConflict: 'uid'
+          });
+
+        if (profileError) {
+          console.error("Profile error details:", profileError);
+          throw profileError;
+        }
+      }
 
       toast({
-        title: "Account created successfully",
-        description: data.user?.identities?.length === 0 
-          ? "Please check your email to confirm your account."
-          : "You can now log in to your account.",
+        title: "Account created",
+        description: "Please check your email to confirm your account.",
       });
       
-      if (data.session) {
-        navigate("/dashboard");
-      }
     } catch (error: any) {
       console.error("Full signup error:", error);
       let errorMessage = error.message;
       
-      // Handle specific Supabase errors
       if (error.code === '23505') {
         errorMessage = "This email is already registered. Please log in instead.";
       } else if (error.message.includes("users_pkey")) {
-        errorMessage = "Account already exists but profile creation failed. Please contact support.";
+        errorMessage = "Account already exists but profile creation failed.";
+      } else if (error.code === '42501') {
+        errorMessage = "Permission denied. Please contact support.";
       }
       
       toast({
