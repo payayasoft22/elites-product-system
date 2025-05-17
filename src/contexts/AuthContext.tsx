@@ -74,30 +74,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 const signup = async (email: string, password: string, name?: string) => {
   setLoading(true);
   try {
+    // Split full name into first/last names
+    const [firstName, ...lastNameParts] = (name || '').split(' ');
+    const lastName = lastNameParts.join(' ') || null;
+
     // 1. Create auth user
     const { data, error } = await supabase.auth.signUp({ 
       email, 
       password,
       options: {
-        data: { full_name: name || '' },
+        data: {
+          first_name: firstName,
+          last_name: lastName,
+          full_name: name || ''
+        },
         emailRedirectTo: `${window.location.origin}/dashboard`
       }
     });
     
     if (error) throw error;
 
-    // 2. Check if user already exists
-    if (data.user?.identities?.length === 0) {
-      throw new Error("An account with this email already exists.");
-    }
-
-    // 3. Create profile record
+    // 2. Create profile record
     if (data.user) {
       const { error: profileError } = await supabase
         .from('profiles')
         .upsert({
           id: data.user.id,
           email: data.user.email,
+          first_name: firstName,
+          last_name: lastName,
           display_name: name || data.user.email?.split('@')[0],
           role: 'user',
           is_first_user: false
@@ -105,10 +110,7 @@ const signup = async (email: string, password: string, name?: string) => {
           onConflict: 'id'
         });
 
-      if (profileError) {
-        console.error("Profile creation error:", profileError);
-        throw new Error("Failed to create user profile.");
-      }
+      if (profileError) throw profileError;
     }
 
     toast({
@@ -121,21 +123,11 @@ const signup = async (email: string, password: string, name?: string) => {
     }
   } catch (error: any) {
     console.error("Signup error:", error);
-    let errorMessage = error.message;
-
-    // Handle specific Supabase errors
-    if (error.code === '23505') {
-      errorMessage = "This email is already registered.";
-    } else if (error.message.includes("permission denied")) {
-      errorMessage = "Permission denied. Please contact support.";
-    }
-
     toast({
       title: "Signup failed",
-      description: errorMessage || "Failed to create account.",
+      description: error.message || "Failed to create account.",
       variant: "destructive",
     });
-    throw error;
   } finally {
     setLoading(false);
   }
