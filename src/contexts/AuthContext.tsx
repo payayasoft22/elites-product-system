@@ -74,19 +74,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 const signup = async (email: string, password: string, name?: string) => {
   setLoading(true);
   try {
-    // Validate email is provided
+    // Validate email exists
     if (!email) {
-      throw new Error("Email is required");
+      throw new Error("Email address is required");
     }
 
-    // Split name into first and last
+    // Split name into components
     const [firstName, ...lastNameParts] = (name || '').split(' ');
     const lastName = lastNameParts.join(' ') || null;
     const displayName = name || email.split('@')[0];
 
     // 1. Create auth user
-    const { data, error } = await supabase.auth.signUp({ 
-      email, 
+    const { data, error } = await supabase.auth.signUp({
+      email,
       password,
       options: {
         data: {
@@ -97,19 +97,19 @@ const signup = async (email: string, password: string, name?: string) => {
         emailRedirectTo: `${window.location.origin}/dashboard`
       }
     });
-    
+
     if (error) throw error;
 
-    // 2. Check if user already exists
+    // 2. Check if user exists
     if (data.user?.identities?.length === 0) {
-      throw new Error("An account with this email already exists.");
+      throw new Error("An account with this email already exists");
     }
 
-    // 3. Create profile record - ensure email is included
+    // 3. Create profile - GUARANTEE email is set
     if (data.user) {
       const profileData = {
         id: data.user.id,
-        email: data.user.email || email, // Fallback to the provided email
+        email: email, // Use the email from the form directly
         first_name: firstName,
         last_name: lastName,
         display_name: displayName,
@@ -118,41 +118,36 @@ const signup = async (email: string, password: string, name?: string) => {
         is_cross: false
       };
 
-      console.log("Creating profile with:", profileData); // Debug log
-
       const { error: profileError } = await supabase
         .from('profiles')
         .upsert(profileData, {
           onConflict: 'id'
         });
 
-      if (profileError) {
-        console.error("Profile error details:", profileError);
-        throw new Error("Failed to create user profile.");
-      }
+      if (profileError) throw profileError;
     }
 
     toast({
       title: "Account created",
-      description: "Please check your email to confirm your account.",
+      description: data.user?.identities?.length === 0
+        ? "Please check your email to confirm your account"
+        : "Welcome! Your account has been created"
     });
-    
+
   } catch (error: any) {
-    console.error("Full signup error:", error);
-    let errorMessage = error.message;
-    
-    if (error.code === '23505') {
-      errorMessage = "This email is already registered. Please log in instead.";
-    } else if (error.message.includes("permission denied")) {
-      errorMessage = "Permission denied. Please contact support.";
-    } else if (error.message.includes("null value in column \"email\"")) {
-      errorMessage = "Email address is required for registration.";
+    console.error("Signup error:", error);
+    let message = "Failed to create account";
+
+    if (error.message.includes("null value in column \"email\"")) {
+      message = "Email address is required";
+    } else if (error.code === '23505') {
+      message = "Account already exists";
     }
-    
+
     toast({
       title: "Signup failed",
-      description: errorMessage || "Failed to create account. Please try again.",
-      variant: "destructive",
+      description: message,
+      variant: "destructive"
     });
     throw error;
   } finally {
