@@ -71,78 +71,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
   
-  const signup = async (email: string, password: string, name?: string) => {
-    setLoading(true);
-    try {
-      // 1. Create auth user
-      const { data, error } = await supabase.auth.signUp({ 
-        email, 
-        password,
-        options: {
-          data: {
-            full_name: name || '',
-          },
-          emailRedirectTo: `${window.location.origin}/dashboard`
-        }
-      });
-      
-      if (error) throw error;
-
-      // 2. Check if user already exists
-      if (data.user?.identities?.length === 0) {
-        throw new Error("An account with this email already exists. Please log in instead.");
+ const signup = async (email: string, password: string, name?: string) => {
+  setLoading(true);
+  try {
+    // 1. Create auth user first
+    const { data, error } = await supabase.auth.signUp({ 
+      email, 
+      password,
+      options: {
+        data: {
+          full_name: name || '',
+        },
+        emailRedirectTo: `${window.location.origin}/dashboard`
       }
+    });
+    
+    if (error) throw error;
 
-      // 3. Create user profile in public.users table
-      if (data.user) {
-        const { error: profileError } = await supabase
-          .from('users')
-          .upsert({
-            uid: data.user.id,
-            email: data.user.email,
-            display_name: name || data.user.email?.split('@')[0],
-            phone: null,
-            providers: ['email'],
-            provider_type: 'email',
-            is_cross: false,
-            created_at: new Date().toISOString()
-          }, {
-            onConflict: 'uid'
-          });
-
-        if (profileError) {
-          console.error("Profile error details:", profileError);
-          throw profileError;
-        }
-      }
-
-      toast({
-        title: "Account created",
-        description: "Please check your email to confirm your account.",
-      });
-      
-    } catch (error: any) {
-      console.error("Full signup error:", error);
-      let errorMessage = error.message;
-      
-      if (error.code === '23505') {
-        errorMessage = "This email is already registered. Please log in instead.";
-      } else if (error.message.includes("users_pkey")) {
-        errorMessage = "Account already exists but profile creation failed.";
-      } else if (error.code === '42501') {
-        errorMessage = "Permission denied. Please contact support.";
-      }
-      
-      toast({
-        title: "Signup failed",
-        description: errorMessage || "Failed to create account. Please try again.",
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
-      setLoading(false);
+    // 2. Check if user already exists
+    if (data.user?.identities?.length === 0) {
+      throw new Error("An account with this email already exists.");
     }
-  };
+
+    // 3. Create user profile in public.users table
+    if (data.user) {
+      const { error: profileError } = await supabase
+        .from('users')
+        .upsert({
+          uid: data.user.id,
+          email: data.user.email,
+          display_name: name || data.user.email?.split('@')[0],
+          phone: null,
+          providers: ['email'],
+          provider_type: 'email',
+          is_cross: false,
+          created_at: new Date().toISOString()
+        });
+
+      if (profileError) {
+        console.error("Profile error details:", profileError);
+        throw new Error("Failed to create user profile.");
+      }
+    }
+
+    toast({
+      title: "Account created",
+      description: "Please check your email to confirm your account.",
+    });
+    
+  } catch (error: any) {
+    console.error("Full signup error:", error);
+    toast({
+      title: "Signup failed",
+      description: error.message || "Failed to create account.",
+      variant: "destructive",
+    });
+    throw error;
+  } finally {
+    setLoading(false);
+  }
+};
   
   const resetPassword = async (email: string) => {
     setLoading(true);
