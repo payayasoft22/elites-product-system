@@ -95,48 +95,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
   
   // Signup function using Supabase auth
-  const signup = async (email: string, password: string, name?: string) => {
-    setLoading(true);
-    try {
-      // Include the name in the user metadata
-      const { data, error } = await supabase.auth.signUp({ 
-        email, 
-        password,
-        options: {
-          data: {
-            full_name: name || '',
-          }
+ const signup = async (email: string, password: string, name?: string) => {
+  setLoading(true);
+  try {
+    // 1. Create auth user
+    const { data, error } = await supabase.auth.signUp({ 
+      email, 
+      password,
+      options: {
+        data: {
+          full_name: name || '',
         }
-      });
-      
-      if (error) {
-        throw error;
       }
-      
-      if (data?.user?.identities && data.user.identities.length === 0) {
-        // User already exists
-        throw new Error("An account with this email already exists. Please log in instead.");
-      }
-      
-      toast({
-        title: "Account created",
-        description: "Your account has been created successfully.",
-        variant: "default",
-      });
-      
-      navigate("/dashboard");
-    } catch (error: any) {
-      console.error("Signup error:", error);
-      toast({
-        title: "Signup failed",
-        description: error.message || "Failed to create account. Please try again.",
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
-      setLoading(false);
+    });
+    
+    if (error) throw error;
+
+    if (data?.user?.identities && data.user.identities.length === 0) {
+      throw new Error("An account with this email already exists.");
     }
-  };
+
+    // 2. Create user profile in database
+    if (data.user) {
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert({
+          uid: data.user.id,
+          email: data.user.email,
+          display_name: name || '',
+          // Add other required fields from your schema
+          phone: null,
+          providers: ['email'],
+          provider_type: 'email',
+          cross: false
+        });
+
+      if (profileError) throw profileError;
+    }
+
+    toast({
+      title: "Account created",
+      description: "Your account has been created successfully.",
+    });
+    
+    navigate("/dashboard");
+  } catch (error: any) {
+    console.error("Signup error:", error);
+    toast({
+      title: "Signup failed",
+      description: error.message || "Failed to create account.",
+      variant: "destructive",
+    });
+    throw error;
+  } finally {
+    setLoading(false);
+  }
+};
   
   // Password reset function
   const resetPassword = async (email: string) => {
