@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -25,15 +24,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  // Check if user is authenticated on load and set up auth listener
   useEffect(() => {
-    // First set up the auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         
-        // Handle auth events with appropriate UI feedback
         if (event === 'SIGNED_IN') {
           toast({
             title: "Signed in successfully",
@@ -44,45 +40,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             title: "Signed out",
             description: "You have been signed out successfully.",
           });
-        } else if (event === 'USER_UPDATED') {
-          toast({
-            title: "Account updated",
-            description: "Your account information has been updated.",
-          });
-        } else if (event === 'PASSWORD_RECOVERY') {
-          toast({
-            title: "Password recovery initiated",
-            description: "Follow the instructions to reset your password.",
-          });
         }
       }
     );
     
-    // Then check for existing session
     supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
       setLoading(false);
     });
     
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, [toast]);
   
-  // Login function using Supabase auth
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      
-      if (error) {
-        throw error;
-      }
-      
+      if (error) throw error;
       navigate("/dashboard");
     } catch (error: any) {
-      console.error("Login error:", error);
       toast({
         title: "Login failed",
         description: error.message || "Invalid credentials. Please try again.",
@@ -94,83 +71,90 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
   
-  // Signup function using Supabase auth
- const signup = async (email: string, password: string, name?: string) => {
-  setLoading(true);
-  try {
-    // 1. Create auth user
-    const { data, error } = await supabase.auth.signUp({ 
-      email, 
-      password,
-      options: {
-        data: {
-          full_name: name || '',
+  const signup = async (email: string, password: string, name?: string) => {
+    setLoading(true);
+    try {
+      // 1. Create auth user
+      const { data, error } = await supabase.auth.signUp({ 
+        email, 
+        password,
+        options: {
+          data: {
+            full_name: name || '',
+          },
+          emailRedirectTo: `${window.location.origin}/dashboard`
         }
+      });
+      
+      if (error) throw error;
+
+      // 2. Check if user already exists
+      if (data.user?.identities?.length === 0) {
+        throw new Error("An account with this email already exists. Please log in instead.");
       }
-    });
-    
-    if (error) throw error;
 
-    if (data?.user?.identities && data.user.identities.length === 0) {
-      throw new Error("An account with this email already exists.");
+      // 3. Create user profile in public.users table
+      if (data.user) {
+        const { error: profileError } = await supabase
+          .from('users')
+          .upsert({
+            uid: data.user.id,
+            email: data.user.email,
+            display_name: name || data.user.email?.split('@')[0],
+            phone: null,
+            providers: ['email'],
+            provider_type: 'email',
+            cross: false,
+            created_at: new Date().toISOString()
+          });
+
+        if (profileError) throw profileError;
+      }
+
+      toast({
+        title: "Account created successfully",
+        description: data.user?.identities?.length === 0 
+          ? "Please check your email to confirm your account."
+          : "You can now log in to your account.",
+      });
+      
+      if (data.session) {
+        navigate("/dashboard");
+      }
+    } catch (error: any) {
+      console.error("Full signup error:", error);
+      let errorMessage = error.message;
+      
+      // Handle specific Supabase errors
+      if (error.code === '23505') {
+        errorMessage = "This email is already registered. Please log in instead.";
+      } else if (error.message.includes("users_pkey")) {
+        errorMessage = "Account already exists but profile creation failed. Please contact support.";
+      }
+      
+      toast({
+        title: "Signup failed",
+        description: errorMessage || "Failed to create account. Please try again.",
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setLoading(false);
     }
-
-    // 2. Create user profile in database
-    if (data.user) {
-      const { error: profileError } = await supabase
-        .from('users')
-        .insert({
-          uid: data.user.id,
-          email: data.user.email,
-          display_name: name || '',
-          // Add other required fields from your schema
-          phone: null,
-          providers: ['email'],
-          provider_type: 'email',
-          cross: false
-        });
-
-      if (profileError) throw profileError;
-    }
-
-    toast({
-      title: "Account created",
-      description: "Your account has been created successfully.",
-    });
-    
-    navigate("/dashboard");
-  } catch (error: any) {
-    console.error("Signup error:", error);
-    toast({
-      title: "Signup failed",
-      description: error.message || "Failed to create account.",
-      variant: "destructive",
-    });
-    throw error;
-  } finally {
-    setLoading(false);
-  }
-};
+  };
   
-  // Password reset function
   const resetPassword = async (email: string) => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
-      
-      if (error) {
-        throw error;
-      }
-      
+      if (error) throw error;
       toast({
         title: "Password reset email sent",
         description: "Check your email for a link to reset your password.",
-        variant: "default",
       });
     } catch (error: any) {
-      console.error("Password reset error:", error);
       toast({
         title: "Password reset failed",
         description: error.message || "Failed to send reset email. Please try again.",
@@ -182,13 +166,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
   
-  // Logout function using Supabase auth
   const logout = async () => {
     try {
       await supabase.auth.signOut();
       navigate("/login");
     } catch (error: any) {
-      console.error("Logout error:", error);
       toast({
         title: "Logout failed",
         description: "Failed to log out. Please try again.",
