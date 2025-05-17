@@ -12,16 +12,15 @@ const FirstUserSetup = () => {
 
     const setupFirstUser = async () => {
       try {
-        // Check if this is the first user in the system
+        // Check total user count (including unconfirmed)
         const { count, error: countError } = await supabase
           .from('profiles')
           .select('*', { count: 'exact', head: true });
 
         if (countError) throw countError;
 
-        // If no users exist yet, this is the first user
+        // If this is the first confirmed user
         if (count === 0) {
-          // Update user as first user and admin
           const { error: updateError } = await supabase
             .from('profiles')
             .update({ 
@@ -32,55 +31,37 @@ const FirstUserSetup = () => {
 
           if (updateError) throw updateError;
 
-          // Define the permission actions
-          const permissionActions: PermissionAction[] = [
-            'add_product',
-            'delete_product',
-            'edit_product',
-            'add_price_history',
-            'delete_price_history',
-            'edit_price_history'
+          // Define permissions
+          const actions: PermissionAction[] = [
+            'add_product', 'delete_product', 'edit_product',
+            'add_price_history', 'delete_price_history', 'edit_price_history'
           ];
 
-          // Batch insert permissions
+          // Insert permissions in a single transaction
           const { error: permError } = await supabase
             .from('role_permissions')
-            .upsert(
-              [
-                ...permissionActions.map(action => ({
-                  role: 'admin',
-                  action,
-                  allowed: true
-                })),
-                ...permissionActions.map(action => ({
-                  role: 'user',
-                  action,
-                  allowed: false
-                }))
-              ],
-              { onConflict: 'role,action' }
-            );
+            .upsert([
+              ...actions.map(a => ({ role: 'admin', action: a, allowed: true })),
+              ...actions.map(a => ({ role: 'user', action: a, allowed: false }))
+            ], { onConflict: 'role,action' });
 
           if (permError) throw permError;
 
           toast({
-            title: 'Admin Setup Complete',
-            description: 'As the first user, you have been granted admin privileges.',
+            title: 'Admin privileges granted',
+            description: 'As the first user, you have full admin access.',
           });
         }
       } catch (error) {
-        console.error('Error in first user setup:', error);
-        toast({
-          title: 'Setup Error',
-          description: 'Failed to complete first user setup.',
-          variant: 'destructive'
-        });
+        console.error('First user setup failed:', error);
       }
     };
 
     setupFirstUser();
   }, [user, toast]);
 
+  return null;
+};
   return null;
 };
 
