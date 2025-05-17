@@ -72,63 +72,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
   
  const signup = async (email: string, password: string, name?: string) => {
-  setLoading(true);
   try {
-    // 1. Create auth user first
+    // 1. Create auth user
     const { data, error } = await supabase.auth.signUp({ 
       email, 
       password,
       options: {
-        data: {
-          full_name: name || '',
-        },
+        data: { full_name: name },
         emailRedirectTo: `${window.location.origin}/dashboard`
       }
     });
     
     if (error) throw error;
 
-    // 2. Check if user already exists
-    if (data.user?.identities?.length === 0) {
-      throw new Error("An account with this email already exists.");
-    }
-
-    // 3. Create user profile in public.users table
+    // 2. Create profile record
     if (data.user) {
       const { error: profileError } = await supabase
-        .from('users')
+        .from('profiles')
         .upsert({
-          uid: data.user.id,
+          id: data.user.id,
           email: data.user.email,
           display_name: name || data.user.email?.split('@')[0],
-          phone: null,
-          providers: ['email'],
-          provider_type: 'email',
-          is_cross: false,
-          created_at: new Date().toISOString()
+          role: 'user',
+          is_first_user: false // Will be updated by FirstUserSetup if needed
         });
 
-      if (profileError) {
-        console.error("Profile error details:", profileError);
-        throw new Error("Failed to create user profile.");
-      }
+      if (profileError) throw profileError;
     }
 
-    toast({
-      title: "Account created",
-      description: "Please check your email to confirm your account.",
-    });
-    
-  } catch (error: any) {
-    console.error("Full signup error:", error);
-    toast({
-      title: "Signup failed",
-      description: error.message || "Failed to create account.",
-      variant: "destructive",
-    });
+    return data;
+  } catch (error) {
+    console.error('Signup error:', error);
     throw error;
-  } finally {
-    setLoading(false);
   }
 };
   
