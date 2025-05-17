@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { supabase, PermissionAction } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -12,14 +12,14 @@ const FirstUserSetup = () => {
 
     const setupFirstUser = async () => {
       try {
-        // Check total user count (including unconfirmed)
+        // Check if this is the first user
         const { count, error: countError } = await supabase
           .from('profiles')
           .select('*', { count: 'exact', head: true });
 
         if (countError) throw countError;
 
-        // If this is the first confirmed user
+        // If no users exist, make this user admin
         if (count === 0) {
           const { error: updateError } = await supabase
             .from('profiles')
@@ -32,18 +32,22 @@ const FirstUserSetup = () => {
           if (updateError) throw updateError;
 
           // Define permissions
-          const actions: PermissionAction[] = [
+          const actions = [
             'add_product', 'delete_product', 'edit_product',
             'add_price_history', 'delete_price_history', 'edit_price_history'
           ];
 
-          // Insert permissions in a single transaction
+          // Insert permissions
           const { error: permError } = await supabase
             .from('role_permissions')
-            .upsert([
-              ...actions.map(a => ({ role: 'admin', action: a, allowed: true })),
-              ...actions.map(a => ({ role: 'user', action: a, allowed: false }))
-            ], { onConflict: 'role,action' });
+            .upsert(
+              actions.map(action => ({
+                role: 'admin',
+                action,
+                allowed: true
+              })),
+              { onConflict: 'role,action' }
+            );
 
           if (permError) throw permError;
 
@@ -54,14 +58,17 @@ const FirstUserSetup = () => {
         }
       } catch (error) {
         console.error('First user setup failed:', error);
+        toast({
+          title: 'Setup Error',
+          description: 'Failed to complete first user setup.',
+          variant: 'destructive'
+        });
       }
     };
 
     setupFirstUser();
   }, [user, toast]);
 
-  return null;
-};
   return null;
 };
 
