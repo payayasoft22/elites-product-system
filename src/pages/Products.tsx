@@ -1,15 +1,14 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import * as z from "zod";
-import { useAuth } from "@/contexts/AuthContext";
-import { Badge } from "@/components/ui/badge";
 
 // Import the extracted components
 import ProductList from "@/components/products/ProductList";
@@ -22,7 +21,6 @@ import { Product, PriceHistory } from "@/components/products/types";
 const Products = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { user } = useAuth();
   
   // State variables
   const [products, setProducts] = useState<Product[]>([]);
@@ -43,22 +41,8 @@ const Products = () => {
   const [tempProduct, setTempProduct] = useState<Product | null>(null);
   const itemsPerPage = 10;
 
-  // Permission checks
-  const canCreate = user?.role === 'admin' || user?.permissions?.create_products;
-  const canEdit = user?.role === 'admin' || user?.permissions?.edit_products;
-  const canDelete = user?.role === 'admin' || user?.permissions?.delete_products;
-
   // Event handlers
   const handleAddProduct = () => {
-    if (!canCreate) {
-      toast({
-        title: "Permission Denied",
-        description: "You don't have permission to create products",
-        variant: "destructive",
-      });
-      return;
-    }
-
     const tempProd: Product = {
       prodcode: "",
       description: "",
@@ -70,27 +54,11 @@ const Products = () => {
   };
 
   const handleEditProduct = (product: Product) => {
-    if (!canEdit) {
-      toast({
-        title: "Permission Denied",
-        description: "You don't have permission to edit products",
-        variant: "destructive",
-      });
-      return;
-    }
     setSelectedProduct(product);
     setIsEditProductOpen(true);
   };
 
   const handleDeleteProduct = (product: Product) => {
-    if (!canDelete) {
-      toast({
-        title: "Permission Denied",
-        description: "You don't have permission to delete products",
-        variant: "destructive",
-      });
-      return;
-    }
     setSelectedProduct(product);
     setIsDeleteConfirmOpen(true);
   };
@@ -121,8 +89,6 @@ const Products = () => {
 
   // CRUD operations
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (!canCreate) return;
-
     try {
       const { error: productError } = await supabase
         .from('product')
@@ -166,7 +132,7 @@ const Products = () => {
   };
 
   const onEdit = async (values: z.infer<typeof formSchema>) => {
-    if (!selectedProduct || !canEdit) return;
+    if (!selectedProduct) return;
     
     try {
       const { error: productError } = await supabase
@@ -211,7 +177,7 @@ const Products = () => {
   };
 
   const onDelete = async () => {
-    if (!selectedProduct || !canDelete) return;
+    if (!selectedProduct) return;
     
     try {
       const { error: priceHistError } = await supabase
@@ -254,7 +220,7 @@ const Products = () => {
       const { data: productsData, error: productsError } = await supabase
         .from('product')
         .select('*')
-        .order('prodcode', { ascending: true });
+        .order('prodcode', { ascending: true }); // Ensure alphabetical order by product code
 
       if (productsError) throw productsError;
 
@@ -454,7 +420,7 @@ const Products = () => {
             <h2 className="text-3xl font-bold tracking-tight">Products</h2>
             <p className="text-muted-foreground">Manage your product catalog and pricing history.</p>
           </div>
-          <Button onClick={handleAddProduct} className="gap-1" disabled={!canCreate}>
+          <Button onClick={handleAddProduct} className="gap-1">
             <Plus className="h-4 w-4" /> Add Product
           </Button>
         </div>
@@ -469,8 +435,6 @@ const Products = () => {
             currentPage={currentPage}
             setCurrentPage={setCurrentPage}
             itemsPerPage={itemsPerPage}
-            canEdit={canEdit}
-            canDelete={canDelete}
             handleAddProduct={handleAddProduct}
             handleEditProduct={handleEditProduct}
             handleDeleteProduct={handleDeleteProduct}
