@@ -32,8 +32,9 @@ function App() {
       <HelmetProvider>
         <Router>
           <AuthProvider>
-            <SidebarProvider>
               <FirstUserSetup />
+            <SidebarProvider>
+      
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/login" element={<Login />} />
