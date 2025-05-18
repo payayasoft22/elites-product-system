@@ -12,32 +12,44 @@ const FirstUserSetup = () => {
 
     const setupFirstUser = async () => {
       try {
-        // Check if this is the first user
+        // 1. First check if user already has a profile
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role, is_first_user')
+          .eq('id', user.id)
+          .single();
+
+        // If profile exists and already has a role, skip
+        if (profile && profile.role) return;
+
+        // 2. Check if this is the first user
         const { count, error: countError } = await supabase
           .from('profiles')
           .select('*', { count: 'exact', head: true });
 
         if (countError) throw countError;
 
-        // If no users exist, make this user admin
-        if (count === 0) {
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update({ 
-              role: 'admin',
-              is_first_user: true 
-            })
-            .eq('id', user.id);
+        const isFirstUser = count === 0;
 
-          if (updateError) throw updateError;
+        // 3. Update profile accordingly
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: user.id,
+            role: isFirstUser ? 'admin' : 'user',
+            is_first_user: isFirstUser,
+            updated_at: new Date().toISOString()
+          });
 
-          // Define permissions
+        if (updateError) throw updateError;
+
+        if (isFirstUser) {
+          // Define and insert permissions
           const actions = [
             'add_product', 'delete_product', 'edit_product',
             'add_price_history', 'delete_price_history', 'edit_price_history'
           ];
 
-          // Insert permissions
           const { error: permError } = await supabase
             .from('role_permissions')
             .upsert(
@@ -66,7 +78,9 @@ const FirstUserSetup = () => {
       }
     };
 
-    setupFirstUser();
+    // Add slight delay to ensure profile creation is complete
+    const timer = setTimeout(setupFirstUser, 500);
+    return () => clearTimeout(timer);
   }, [user, toast]);
 
   return null;
