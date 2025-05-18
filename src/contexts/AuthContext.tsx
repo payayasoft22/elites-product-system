@@ -5,60 +5,109 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
 
+interface UserProfile {
+  id: string;
+  email: string;
+  name: string;
+  role: 'user' | 'admin';
+  first_name?: string;
+  last_name?: string;
+  display_name?: string;
+}
+
 interface AuthContextType {
   user: User | null;
+  profile: UserProfile | null;
   session: Session | null;
   loading: boolean;
+  permissions: Record<string, boolean>;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   isAuthenticated: boolean;
+  refreshUserData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   const navigate = useNavigate();
   const { toast } = useToast();
-  
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, currentSession) => {
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-        
-        if (event === 'SIGNED_IN') {
-          // Check if this is the first user after sign in
-          await checkFirstUserSetup(currentSession?.user);
-          toast({
-            title: "Signed in successfully",
-            description: "Welcome to Elites Project System!",
-          });
-          navigate("/dashboard");
-        } else if (event === 'SIGNED_OUT') {
-          toast({
-            title: "Signed out",
-            description: "You have been signed out successfully.",
-          });
-        }
-      }
-    );
+
+  const fetchUserProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email, name, role, first_name, last_name, display_name')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      return null;
+    }
+  };
+
+  const fetchUserPermissions = async (userId: string, role: string) => {
+    try {
+      // Get role-based permissions
+      const { data: rolePermissions } = await supabase
+        .from('role_permissions')
+        .select('action, allowed')
+        .eq('role', role);
+
+      // Get user-specific permissions (override role permissions)
+      const { data: userPermissions } = await supabase
+        .from('user_permissions')
+        .select('action, allowed')
+        .eq('user_id', userId);
+
+      // Combine permissions (user-specific take precedence)
+      const permissionsMap: Record<string, boolean> = {};
+
+      // First apply role permissions
+      rolePermissions?.forEach(perm => {
+        permissionsMap[perm.action] = perm.allowed;
+      });
+
+      // Then override with user-specific permissions
+      userPermissions?.forEach(perm => {
+        permissionsMap[perm.action] = perm.allowed;
+      });
+
+      return permissionsMap;
+    } catch (error) {
+      console.error('Error fetching permissions:', error);
+      return {};
+    }
+  };
+
+  const refreshUserData = async () => {
+    if (!user?.id) return;
     
-    supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      if (currentSession?.user) {
-        await checkFirstUserSetup(currentSession.user);
-      }
+    try {
+      setLoading(true);
+      const profileData = await fetchUserProfile(user.id);
+      if (!profileData) return;
+
+      const permissionsData = await fetchUserPermissions(user.id, profileData.role);
+      
+      setProfile(profileData);
+      setPermissions(permissionsData);
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+    } finally {
       setLoading(false);
-    });
-    
-    return () => subscription.unsubscribe();
-  }, [toast, navigate]);
+    }
+  };
 
   const checkFirstUserSetup = async (user: User) => {
     try {
@@ -82,28 +131,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isFirstUser) {
         await supabase
           .from('profiles')
-          .update({
+          .upsert({
+            id: user.id,
+            email: user.email,
+            name: user.user_metadata?.full_name || user.email.split('@')[0],
             role: 'admin',
-            is_first_user: true,
             updated_at: new Date().toISOString()
-          })
-          .eq('id', user.id);
+          });
 
         // 4. Set up admin permissions
-        const actions = [
-          'add_product', 'delete_product', 'edit_product',
-          'add_price_history', 'delete_price_history', 'edit_price_history'
+        const adminActions = [
+          'create_products', 'edit_products', 'delete_products',
+          'manage_price_history', 'manage_users', 'view_reports'
         ];
 
         await supabase
           .from('role_permissions')
           .upsert(
-            actions.map(action => ({
+            adminActions.map(action => ({
               role: 'admin',
               action,
               allowed: true
             })),
-            { onConflict: 'role,action' }
+            { onConflict: ['role', 'action'] }
           );
 
         toast({
@@ -115,7 +165,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('First user setup check failed:', error);
     }
   };
-  
+
+  const handleAuthChange = async (event: string, currentSession: Session | null) => {
+    setSession(currentSession);
+    setUser(currentSession?.user ?? null);
+
+    if (event === 'SIGNED_IN' && currentSession?.user) {
+      try {
+        await checkFirstUserSetup(currentSession.user);
+        const profileData = await fetchUserProfile(currentSession.user.id);
+        
+        if (profileData) {
+          const permissionsData = await fetchUserPermissions(
+            currentSession.user.id, 
+            profileData.role
+          );
+          
+          setProfile(profileData);
+          setPermissions(permissionsData);
+          
+          toast({
+            title: "Signed in successfully",
+            description: `Welcome back, ${profileData.name || profileData.email}!`,
+          });
+          navigate("/dashboard");
+        }
+      } catch (error) {
+        console.error('Error handling sign in:', error);
+      }
+    } else if (event === 'SIGNED_OUT') {
+      setProfile(null);
+      setPermissions({});
+      toast({
+        title: "Signed out",
+        description: "You have been signed out successfully.",
+      });
+      navigate("/login");
+    }
+  };
+
+  useEffect(() => {
+    const initializeAuth = async () => {
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        
+        if (currentSession?.user) {
+          await handleAuthChange('SIGNED_IN', currentSession);
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange);
+    
+    return () => subscription.unsubscribe();
+  }, [navigate, toast]);
+
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
@@ -132,7 +242,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     }
   };
-  
+
   const signup = async (email: string, password: string, name?: string) => {
     setLoading(true);
     try {
@@ -158,7 +268,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           data: {
             first_name: firstName,
             last_name: lastName,
-            full_name: name || displayName
+            full_name: displayName
           },
           emailRedirectTo: `${window.location.origin}/dashboard`
         }
@@ -168,38 +278,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // 3. Create profile with appropriate role
       if (data.user) {
-        const { error: profileError } = await supabase
+        await supabase
           .from('profiles')
           .upsert({
             id: data.user.id,
             email,
             first_name: firstName,
             last_name: lastName,
-            display_name: displayName,
-            role: isFirstUser ? 'admin' : 'user',
-            is_first_user: isFirstUser
-          }, {
-            onConflict: 'id'
+            name: displayName,
+            role: isFirstUser ? 'admin' : 'user'
           });
 
-        if (profileError) throw profileError;
-
-        // 4. If first user, set up permissions
+        // 4. If first user, set up admin permissions
         if (isFirstUser) {
-          const actions = [
-            'add_product', 'delete_product', 'edit_product',
-            'add_price_history', 'delete_price_history', 'edit_price_history'
+          const adminActions = [
+            'create_products', 'edit_products', 'delete_products',
+            'manage_price_history', 'manage_users', 'view_reports'
           ];
 
           await supabase
             .from('role_permissions')
             .upsert(
-              actions.map(action => ({
+              adminActions.map(action => ({
                 role: 'admin',
                 action,
                 allowed: true
               })),
-              { onConflict: 'role,action' }
+              { onConflict: ['role', 'action'] }
             );
         }
       }
@@ -225,7 +330,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     }
   };
-  
+
   const resetPassword = async (email: string) => {
     setLoading(true);
     try {
@@ -248,31 +353,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     }
   };
-  
+
   const logout = async () => {
     try {
       await supabase.auth.signOut();
-      navigate("/login");
     } catch (error: any) {
       toast({
         title: "Logout failed",
         description: "Failed to log out. Please try again.",
         variant: "destructive",
       });
+      throw error;
     }
   };
-  
+
   return (
     <AuthContext.Provider
       value={{
         user,
+        profile,
         session,
         loading,
+        permissions,
         login,
         signup,
         logout,
         resetPassword,
         isAuthenticated: !!user,
+        refreshUserData
       }}
     >
       {children}
