@@ -14,6 +14,7 @@ import { AlertTriangle, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
+// Define types for permissions data
 interface Permission {
   id: string;
   role: "user" | "admin";
@@ -42,12 +43,8 @@ const UserPermissions = () => {
   const [processingRequest, setProcessingRequest] = useState<string | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
-
-  const ALWAYS_ALLOWED_ACTIONS: PermissionAction[] = [
-    'open_product',
-    'close_product'
-  ];
-
+  
+  // Group permissions by role for easier display
   const permissionsByRole = permissionsData.reduce((acc, permission) => {
     if (!acc[permission.role]) {
       acc[permission.role] = [];
@@ -56,8 +53,8 @@ const UserPermissions = () => {
     return acc;
   }, {} as Record<string, Permission[]>);
 
+  // Check if a request is pending for the current user
   const hasPendingRequest = (action: PermissionAction): boolean => {
-    if (ALWAYS_ALLOWED_ACTIONS.includes(action)) return false;
     return permissionRequests.some(
       request => request.user_id === user?.id && request.action === action && request.status === 'pending'
     );
@@ -78,14 +75,7 @@ const UserPermissions = () => {
         .order('action', { ascending: true });
 
       if (error) throw error;
-      
-      // Force set allowed=true for our always-allowed actions
-      const modifiedData = data.map(permission => ({
-        ...permission,
-        allowed: ALWAYS_ALLOWED_ACTIONS.includes(permission.action) ? true : permission.allowed
-      }));
-      
-      setPermissionsData(modifiedData);
+      setPermissionsData(data);
     } catch (error: any) {
       console.error('Error fetching permissions:', error);
       toast({
@@ -100,6 +90,7 @@ const UserPermissions = () => {
 
   const fetchPermissionRequests = async () => {
     try {
+      // Use admin_requests instead of permission_requests
       const { data, error } = await supabase
         .from('admin_requests')
         .select(`
@@ -109,14 +100,17 @@ const UserPermissions = () => {
         .order('requested_at', { ascending: false });
 
       if (error) throw error;
-
-      const transformedData = (data || []).map((item: any) => ({
-        ...item,
-        user_email: item.profiles?.email || 'Unknown',
-        user_name: item.profiles?.first_name || item.profiles?.name || 'Unknown User',
-        action: item.action as PermissionAction
-      } as PermissionRequest));
-
+      
+      // Transform data to include user details
+      const transformedData = (data || []).map((item: any) => {
+        return {
+          ...item,
+          user_email: item.profiles?.email || 'Unknown',
+          user_name: item.profiles?.first_name || item.profiles?.name || 'Unknown User',
+          action: item.action as PermissionAction
+        } as PermissionRequest;
+      });
+      
       setPermissionRequests(transformedData);
     } catch (error: any) {
       console.error('Error fetching permission requests:', error);
@@ -129,16 +123,10 @@ const UserPermissions = () => {
   };
 
   const updatePermission = async (permission: Permission, allowed: boolean) => {
-    // Skip update for always-allowed actions
-    if (ALWAYS_ALLOWED_ACTIONS.includes(permission.action)) {
-      toast({
-        title: 'Notice',
-        description: 'This permission cannot be modified',
-      });
-      return;
-    }
-
     try {
+      // Make a type-safe update by explicitly defining the role type
+      const roleValue: "user" | "admin" = permission.role as "user" | "admin";
+      
       const { error } = await supabase
         .from('role_permissions')
         .update({ allowed })
@@ -146,9 +134,36 @@ const UserPermissions = () => {
 
       if (error) throw error;
 
+      // Update local state
       setPermissionsData(prevPermissions =>
         prevPermissions.map(p => (p.id === permission.id ? { ...p, allowed } : p))
       );
+
+      // Create notification for all users about permission change
+      const notifyAllUsers = async () => {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id');
+        
+        if (!profiles) return;
+        
+        const notifications = profiles.map(profile => ({
+          type: 'permission_change',
+          content: JSON.stringify({
+            action: permission.action,
+            role: permission.role,
+            allowed: allowed,
+            changed_by: user?.email,
+            changed_at: new Date().toISOString()
+          }),
+          user_id: profile.id
+        }));
+        
+        await supabase.from('notifications').insert(notifications);
+      };
+      
+      // Notify users about the permission change
+      await notifyAllUsers();
 
       toast({
         title: 'Permission Updated',
@@ -165,10 +180,11 @@ const UserPermissions = () => {
   };
 
   const requestPermission = async (action: PermissionAction) => {
-    if (!user || ALWAYS_ALLOWED_ACTIONS.includes(action)) return;
-
+    if (!user) return;
+    
     try {
       setProcessingRequest(action);
+      
       const { error } = await supabase
         .from('admin_requests')
         .insert({
@@ -176,14 +192,37 @@ const UserPermissions = () => {
           action: action,
           status: 'pending'
         });
-
+        
       if (error) throw error;
-
+      
       toast({
         title: 'Request Submitted',
         description: `Your request for "${getActionDisplayName(action)}" permission has been submitted.`,
       });
+      
+      // Reload permission requests
       await fetchPermissionRequests();
+      
+      // Notify admins about the request
+      const { data: adminProfiles } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('role', 'admin');
+        
+      if (adminProfiles?.length) {
+        const notifications = adminProfiles.map(admin => ({
+          type: 'permission_request',
+          content: JSON.stringify({
+            action: action,
+            requested_by: user.email,
+            requested_by_name: user.user_metadata?.full_name || 'A user',
+            requested_at: new Date().toISOString()
+          }),
+          user_id: admin.id
+        }));
+        
+        await supabase.from('notifications').insert(notifications);
+      }
     } catch (error: any) {
       console.error('Error requesting permission:', error);
       toast({
@@ -195,15 +234,18 @@ const UserPermissions = () => {
       setProcessingRequest(null);
     }
   };
-
+  
   const handleRequestAction = async (requestId: string, status: 'approved' | 'rejected') => {
     if (!user) return;
-
+    
     try {
       setProcessingRequest(requestId);
+      
+      // Find the request to get the user_id and action
       const request = permissionRequests.find(r => r.id === requestId);
       if (!request) return;
-
+      
+      // Update the request status
       const { error: updateError } = await supabase
         .from('admin_requests')
         .update({
@@ -212,10 +254,27 @@ const UserPermissions = () => {
           resolved_by: user.id
         })
         .eq('id', requestId);
-
+        
       if (updateError) throw updateError;
-
+      
+      // If approved, create a notification for the user
+      const notificationContent = JSON.stringify({
+        request_id: requestId,
+        action: request.action,
+        status: status,
+        resolved_by: user.email,
+        resolved_at: new Date().toISOString()
+      });
+      
+      await supabase.from('notifications').insert({
+        type: 'permission_request_resolved',
+        content: notificationContent,
+        user_id: request.user_id
+      });
+      
+      // Reload the requests
       await fetchPermissionRequests();
+      
       toast({
         title: 'Request Processed',
         description: `Permission request has been ${status}.`,
@@ -240,8 +299,8 @@ const UserPermissions = () => {
   };
 
   const userCanPerformAction = (action: PermissionAction): boolean => {
-    return ALWAYS_ALLOWED_ACTIONS.includes(action) || 
-      !!permissionsData.find(p => p.role === 'user' && p.action === action)?.allowed;
+    const userPermission = permissionsData.find(p => p.role === 'user' && p.action === action);
+    return !!userPermission?.allowed;
   };
 
   if (!user) {
@@ -253,7 +312,7 @@ const UserPermissions = () => {
       <Helmet>
         <title>User Permissions | Elites Product Management</title>
       </Helmet>
-
+      
       <div className="space-y-6">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">User Permissions</h2>
@@ -274,7 +333,7 @@ const UserPermissions = () => {
               )}
             </TabsTrigger>
           </TabsList>
-
+          
           <TabsContent value="permissions" className="space-y-4">
             {loading ? (
               <div className="flex justify-center p-6">
@@ -296,16 +355,11 @@ const UserPermissions = () => {
                       <ul className="divide-y">
                         {permissions.map((permission) => (
                           <li key={permission.id} className="flex items-center justify-between p-4">
-                            <div className="flex items-center space-x-2">
-                              <span className="font-medium">{getActionDisplayName(permission.action)}</span>
-                              {ALWAYS_ALLOWED_ACTIONS.includes(permission.action) && (
-                                <Badge variant="secondary">Always Allowed</Badge>
-                              )}
-                            </div>
+                            <span className="font-medium">{getActionDisplayName(permission.action)}</span>
                             <Switch
                               checked={permission.allowed}
                               onCheckedChange={(checked) => updatePermission(permission, checked)}
-                              disabled={ALWAYS_ALLOWED_ACTIONS.includes(permission.action)}
+                              disabled={role === 'user' && !user}
                             />
                           </li>
                         ))}
@@ -315,8 +369,79 @@ const UserPermissions = () => {
                 ))}
               </div>
             )}
+            
+            {!loading && user && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Request Permissions</CardTitle>
+                  <CardDescription>
+                    Request access to perform specific actions
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <Alert>
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTitle>Limited Access</AlertTitle>
+                      <AlertDescription>
+                        Some actions are restricted and require admin approval. You can request access to these actions below.
+                      </AlertDescription>
+                    </Alert>
+                    
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Action</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Request Access</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {permissionsData
+                          .filter(p => p.role === 'user' && !p.allowed)
+                          .map((permission) => (
+                            <TableRow key={permission.id}>
+                              <TableCell>{getActionDisplayName(permission.action)}</TableCell>
+                              <TableCell>
+                                {hasPendingRequest(permission.action) ? (
+                                  <Badge variant="outline" className="bg-yellow-50 text-yellow-800 border-yellow-300">
+                                    Request Pending
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-red-50 text-red-800 border-red-300">
+                                    No Access
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => requestPermission(permission.action)}
+                                  disabled={hasPendingRequest(permission.action) || processingRequest === permission.action}
+                                >
+                                  {processingRequest === permission.action ? (
+                                    <>
+                                      <div className="mr-1 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+                                      Processing...
+                                    </>
+                                  ) : hasPendingRequest(permission.action) ? (
+                                    "Requested"
+                                  ) : (
+                                    "Request Access"
+                                  )}
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
-
+          
           <TabsContent value="requests">
             <Card>
               <CardHeader>
@@ -342,9 +467,9 @@ const UserPermissions = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {permissionRequests
-                        .filter(request => !ALWAYS_ALLOWED_ACTIONS.includes(request.action))
-                        .map((request) => (
+                      {permissionRequests.map((request) => {
+                        const isPending = request.status === 'pending';
+                        return (
                           <TableRow key={request.id}>
                             <TableCell>
                               <div>
@@ -353,28 +478,32 @@ const UserPermissions = () => {
                               </div>
                             </TableCell>
                             <TableCell>
-                              {getActionDisplayName(request.action)}
+                              {request.action ? getActionDisplayName(request.action) : 'Unknown action'}
                             </TableCell>
                             <TableCell>
-                              {new Date(request.requested_at || request.created_at || '').toLocaleDateString()}
+                              {request.requested_at ? 
+                                new Date(request.requested_at).toLocaleDateString() : 
+                                new Date(request.created_at || '').toLocaleDateString()}
                             </TableCell>
                             <TableCell>
-                              {request.status === 'pending' ? (
+                              {request.status === 'pending' && (
                                 <Badge variant="outline" className="bg-yellow-50 text-yellow-800 border-yellow-300">
                                   Pending
                                 </Badge>
-                              ) : request.status === 'approved' ? (
+                              )}
+                              {request.status === 'approved' && (
                                 <Badge variant="outline" className="bg-green-50 text-green-800 border-green-300">
                                   Approved
                                 </Badge>
-                              ) : (
+                              )}
+                              {request.status === 'rejected' && (
                                 <Badge variant="outline" className="bg-red-50 text-red-800 border-red-300">
                                   Rejected
                                 </Badge>
                               )}
                             </TableCell>
                             <TableCell>
-                              {request.status === 'pending' && (
+                              {isPending ? (
                                 <div className="flex space-x-2">
                                   <Button 
                                     size="sm" 
@@ -397,10 +526,16 @@ const UserPermissions = () => {
                                     Reject
                                   </Button>
                                 </div>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">
+                                  {request.status === 'approved' ? 'Approved' : 'Rejected'} on{' '}
+                                  {request.resolved_at ? new Date(request.resolved_at).toLocaleDateString() : 'unknown date'}
+                                </span>
                               )}
                             </TableCell>
                           </TableRow>
-                        ))}
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 )}
