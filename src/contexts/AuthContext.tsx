@@ -1,4 +1,3 @@
-// src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -8,7 +7,8 @@ import { Session, User } from "@supabase/supabase-js";
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  loading: boolean;
+  loading: boolean; // For auth actions (login/signup/etc)
+  initializing: boolean; // For app initialization
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -21,48 +21,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Action loading states
+  const [initializing, setInitializing] = useState(true); // App initialization
   const navigate = useNavigate();
   const { toast } = useToast();
-  
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, currentSession) => {
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-        
-        if (event === 'SIGNED_IN') {
-          // Check if this is the first user after sign in
-          await checkFirstUserSetup(currentSession?.user);
-          toast({
-            title: "Signed in successfully",
-            description: "Welcome to Elites Project System!",
-          });
-          navigate("/dashboard");
-        } else if (event === 'SIGNED_OUT') {
-          toast({
-            title: "Signed out",
-            description: "You have been signed out successfully.",
-          });
-        }
-      }
-    );
-    
-    supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      if (currentSession?.user) {
-        await checkFirstUserSetup(currentSession.user);
-      }
-      setLoading(false);
-    });
-    
-    return () => subscription.unsubscribe();
-  }, [toast, navigate]);
 
   const checkFirstUserSetup = async (user: User) => {
     try {
-      // 1. Check if user already has admin role
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
@@ -71,14 +36,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (profile?.role === 'admin') return;
 
-      // 2. Check if this is the first user
       const { count } = await supabase
         .from('profiles')
         .select('*', { count: 'exact', head: true });
 
       const isFirstUser = count === 0;
 
-      // 3. Update profile if needed
       if (isFirstUser) {
         await supabase
           .from('profiles')
@@ -89,7 +52,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           })
           .eq('id', user.id);
 
-        // 4. Set up admin permissions
         const actions = [
           'add_product', 'delete_product', 'edit_product',
           'add_price_history', 'delete_price_history', 'edit_price_history'
@@ -115,7 +77,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('First user setup check failed:', error);
     }
   };
-  
+
+  useEffect(() => {
+    let mounted = true;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        if (!mounted) return;
+        
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        
+        if (event === 'SIGNED_IN') {
+          await checkFirstUserSetup(currentSession?.user!);
+          toast({
+            title: "Signed in successfully",
+            description: "Welcome to Elites Project System!",
+          });
+          navigate("/dashboard");
+        } else if (event === 'SIGNED_OUT') {
+          toast({
+            title: "Signed out",
+            description: "You have been signed out successfully.",
+          });
+        }
+      }
+    );
+
+    // Initial session check
+    setInitializing(true);
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!mounted) return;
+      
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        await checkFirstUserSetup(session.user);
+      }
+    }).finally(() => {
+      if (mounted) setInitializing(false);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [toast, navigate]);
+
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
@@ -132,25 +140,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     }
   };
-  
+
   const signup = async (email: string, password: string, name?: string) => {
     setLoading(true);
     try {
-      // Validate input
       if (!email) throw new Error("Email is required");
 
       const [firstName, ...lastNameParts] = (name || '').split(' ');
       const lastName = lastNameParts.join(' ') || null;
       const displayName = name || email.split('@')[0];
 
-      // 1. Check if this will be the first user
       const { count } = await supabase
         .from('profiles')
         .select('*', { count: 'exact', head: true });
 
       const isFirstUser = count === 0;
 
-      // 2. Create auth user
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -166,7 +171,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) throw error;
 
-      // 3. Create profile with appropriate role
       if (data.user) {
         const { error: profileError } = await supabase
           .from('profiles')
@@ -178,13 +182,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             display_name: displayName,
             role: isFirstUser ? 'admin' : 'user',
             is_first_user: isFirstUser
-          }, {
-            onConflict: 'id'
-          });
+          }, { onConflict: 'id' });
 
         if (profileError) throw profileError;
 
-        // 4. If first user, set up permissions
         if (isFirstUser) {
           const actions = [
             'add_product', 'delete_product', 'edit_product',
@@ -225,7 +226,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     }
   };
-  
+
   const resetPassword = async (email: string) => {
     setLoading(true);
     try {
@@ -248,7 +249,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     }
   };
-  
+
   const logout = async () => {
     try {
       await supabase.auth.signOut();
@@ -261,13 +262,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     }
   };
-  
+
   return (
     <AuthContext.Provider
       value={{
         user,
         session,
         loading,
+        initializing,
         login,
         signup,
         logout,
@@ -275,7 +277,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: !!user,
       }}
     >
-      {children}
+      {!initializing && children}
     </AuthContext.Provider>
   );
 };
