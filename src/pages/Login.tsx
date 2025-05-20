@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -19,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import ForgotPasswordDialog from "@/components/ForgotPasswordDialog";
+import { Spinner } from "@/components/ui/spinner"; // Add this component
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
@@ -28,7 +28,7 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 const Login = () => {
-  const { login, loading } = useAuth();
+  const { login, loading, initializing } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   
@@ -44,9 +44,25 @@ const Login = () => {
     try {
       await login(data.email, data.password);
     } catch (error) {
-      console.error("Login error:", error);
+      // Error is already handled in AuthContext
+      form.setError("root", {
+        type: "manual",
+        message: "Invalid credentials. Please try again.",
+      });
     }
   };
+
+  // Show loading screen during app initialization
+  if (initializing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-brand-50 to-white">
+        <div className="flex flex-col items-center gap-4">
+          <Spinner className="h-12 w-12 text-brand-600" />
+          <p className="text-brand-600">Loading application...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-brand-50 to-white p-4">
@@ -65,6 +81,12 @@ const Login = () => {
           <CardContent>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                {form.formState.errors.root && (
+                  <p className="text-sm font-medium text-destructive">
+                    {form.formState.errors.root.message}
+                  </p>
+                )}
+                
                 <FormField
                   control={form.control}
                   name="email"
@@ -135,7 +157,7 @@ const Login = () => {
                 >
                   {loading ? (
                     <div className="flex items-center gap-2">
-                      <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin"></div>
+                      <Spinner className="h-4 w-4 text-white" />
                       <span>Logging in...</span>
                     </div>
                   ) : (
@@ -151,7 +173,7 @@ const Login = () => {
           
           <CardFooter className="flex justify-center border-t pt-4">
             <p className="text-center text-sm text-muted-foreground">
-              Don&apos;t have an account?{" "}
+              Don't have an account?{" "}
               <Link to="/signup" className="text-brand-600 hover:text-brand-700 font-medium">
                 Sign up
               </Link>
