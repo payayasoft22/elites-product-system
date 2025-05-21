@@ -92,6 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     setLoading(true);
 
+    // Listen to auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
@@ -102,7 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           title: "Signed in successfully",
           description: "Welcome to Elites Project System!",
         });
-        // Redirect only if user is on login or root page
+        // Redirect only if on login or root page
         if (location.pathname === "/login" || location.pathname === "/") {
           navigate("/dashboard");
         }
@@ -115,10 +116,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: "You have been signed out successfully.",
         });
       }
-
       setLoading(false);
     });
 
+    // On component mount, get current session
     supabase.auth.getSession()
       .then(async ({ data: { session: currentSession } }) => {
         setSession(currentSession);
@@ -300,7 +301,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // While loading, render a loading UI to avoid flicker
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
