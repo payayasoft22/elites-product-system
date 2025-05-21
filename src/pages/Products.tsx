@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -85,6 +84,11 @@ const Products = () => {
   const handleDeletePrice = (price: PriceHistory) => {
     setSelectedPrice(price);
     setIsDeletePriceOpen(true);
+  };
+
+  // NEW: Handle View Price History
+  const handleViewPriceHistory = (prodcode: string) => {
+    navigate(`/price-history/${prodcode}`);
   };
 
   // CRUD operations
@@ -438,6 +442,7 @@ const Products = () => {
             handleAddProduct={handleAddProduct}
             handleEditProduct={handleEditProduct}
             handleDeleteProduct={handleDeleteProduct}
+            handleViewPriceHistory={handleViewPriceHistory} {/* <-- pass the new handler */}
           />
         </Card>
       </div>
