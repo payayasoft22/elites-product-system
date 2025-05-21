@@ -1,9 +1,15 @@
-
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Package, Plus, Loader2, Search, Edit, Trash, History } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -39,17 +45,21 @@ const ProductList = ({
   itemsPerPage,
   handleAddProduct,
   handleEditProduct,
-  handleDeleteProduct
+  handleDeleteProduct,
 }: ProductListProps) => {
   const navigate = useNavigate();
 
-  const filteredProducts = searchQuery.trim() === "" 
-    ? products 
-    : products.filter(product => 
-        product.prodcode.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        (product.description?.toLowerCase() || "").includes(searchQuery.toLowerCase())
-      )
-      .sort((a, b) => a.prodcode.localeCompare(b.prodcode)); // Sort filtered results alphabetically
+  // Filter and sort products based on search query
+  const filteredProducts =
+    searchQuery.trim() === ""
+      ? products
+      : products
+          .filter(
+            (product) =>
+              product.prodcode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+              (product.description?.toLowerCase() || "").includes(searchQuery.toLowerCase())
+          )
+          .sort((a, b) => a.prodcode.localeCompare(b.prodcode));
 
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -57,11 +67,11 @@ const ProductList = ({
 
   const formatPrice = (price: number | null): string => {
     if (price === null) return "N/A";
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
       minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      maximumFractionDigits: 2,
     }).format(price);
   };
 
@@ -137,17 +147,17 @@ const ProductList = ({
                     <TableCell>{formatPrice(product.currentPrice)}</TableCell>
                     <TableCell>
                       <div className="flex space-x-2">
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           className="flex items-center gap-1"
-                          onClick={() => navigate(`/products/${product.prodcode}/price-history`)}
+                          onClick={() => navigate(`/price-history/${product.prodcode}`)}
                         >
                           <History className="h-3.5 w-3.5" />
                           <span>Price History</span>
                         </Button>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           className="flex items-center gap-1"
                           onClick={() => handleEditProduct(product)}
@@ -155,8 +165,8 @@ const ProductList = ({
                           <Edit className="h-3.5 w-3.5" />
                           <span>Edit</span>
                         </Button>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           className="flex items-center gap-1 text-destructive hover:text-destructive"
                           onClick={() => handleDeleteProduct(product)}
@@ -171,17 +181,17 @@ const ProductList = ({
               </TableBody>
             </Table>
           </div>
-          
+
           {totalPages > 1 && (
             <Pagination className="mt-4">
               <PaginationContent>
                 <PaginationItem>
-                  <PaginationPrevious 
+                  <PaginationPrevious
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                     className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
                   />
                 </PaginationItem>
-                
+
                 {Array.from({ length: totalPages }).map((_, index) => (
                   <PaginationItem key={index}>
                     <PaginationLink
@@ -192,9 +202,9 @@ const ProductList = ({
                     </PaginationLink>
                   </PaginationItem>
                 ))}
-                
+
                 <PaginationItem>
-                  <PaginationNext 
+                  <PaginationNext
                     onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                     className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
                   />
