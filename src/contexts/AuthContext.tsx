@@ -26,7 +26,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const location = useLocation();
   const { toast } = useToast();
 
-  // Check and assign first user admin privileges
   const checkFirstUserSetup = async (user: User | null) => {
     if (!user) return;
     try {
@@ -35,14 +34,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .select("role")
         .eq("id", user.id)
         .single();
-
       if (profileError) throw profileError;
       if (profile?.role === "admin") return;
 
       const { count, error: countError } = await supabase
         .from("profiles")
         .select("*", { count: "exact", head: true });
-
       if (countError) throw countError;
 
       if (count === 0) {
@@ -54,7 +51,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             updated_at: new Date().toISOString(),
           })
           .eq("id", user.id);
-
         if (updateError) throw updateError;
 
         const actions = [
@@ -76,7 +72,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             })),
             { onConflict: "role,action" }
           );
-
         if (permissionError) throw permissionError;
 
         toast({
@@ -92,18 +87,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     setLoading(true);
 
-    // Listen to auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, currentSession) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
 
       if (event === "SIGNED_IN") {
-        await checkFirstUserSetup(currentSession?.user ?? null);
+        // Fire and forget, don't await here to avoid blocking
+        checkFirstUserSetup(currentSession?.user ?? null).catch(console.error);
         toast({
           title: "Signed in successfully",
           description: "Welcome to Elites Project System!",
         });
-        // Redirect only if on login or root page
         if (location.pathname === "/login" || location.pathname === "/") {
           navigate("/dashboard");
         }
@@ -116,23 +110,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: "You have been signed out successfully.",
         });
       }
+
       setLoading(false);
     });
 
-    // On component mount, get current session
-    supabase.auth.getSession()
-      .then(async ({ data: { session: currentSession } }) => {
+    // On mount get session once and handle errors gracefully
+    (async () => {
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         if (currentSession?.user) {
           await checkFirstUserSetup(currentSession.user);
         }
-        setLoading(false);
-      })
-      .catch((error) => {
+      } catch (error) {
         console.error("Failed to get current session", error);
+      } finally {
         setLoading(false);
-      });
+      }
+    })();
 
     return () => subscription.unsubscribe();
   }, [toast, navigate, location.pathname]);
@@ -166,7 +162,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { count, error: countError } = await supabase
         .from("profiles")
         .select("*", { count: "exact", head: true });
-
       if (countError) throw countError;
 
       const isFirstUser = count === 0;
@@ -203,7 +198,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             },
             { onConflict: "id" }
           );
-
         if (profileError) throw profileError;
 
         if (isFirstUser) {
@@ -226,7 +220,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               })),
               { onConflict: "role,action" }
             );
-
           if (permissionError) throw permissionError;
         }
       }
