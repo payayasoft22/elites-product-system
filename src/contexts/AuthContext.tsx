@@ -25,47 +25,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, currentSession) => {
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-
-        if (event === 'SIGNED_IN') {
-          await checkFirstUserSetup(currentSession?.user);
-          toast({
-            title: "Signed in successfully",
-            description: "Welcome to Elites Project System!",
-          });
-          navigate("/dashboard");
-        } else if (event === 'SIGNED_OUT') {
-          toast({
-            title: "Signed out",
-            description: "You have been signed out successfully.",
-          });
-          setUser(null);
-          setSession(null);
-          navigate("/login");
-        }
-      }
-    );
-
-    supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      if (currentSession?.user) {
-        await checkFirstUserSetup(currentSession.user);
-      }
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [toast, navigate]);
-
-  const checkFirstUserSetup = async (user: User | undefined | null) => {
+  // Check and assign first user admin privileges
+  const checkFirstUserSetup = async (user: User | null) => {
     if (!user) return;
     try {
-      // Check if user already has admin role
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
@@ -75,17 +38,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (profileError) throw profileError;
       if (profile?.role === 'admin') return;
 
-      // Check if this is the first user
       const { count, error: countError } = await supabase
         .from('profiles')
         .select('*', { count: 'exact', head: true });
 
       if (countError) throw countError;
 
-      const isFirstUser = count === 0;
-
-      if (isFirstUser) {
-        // Update profile role & flag
+      if (count === 0) {
         const { error: updateError } = await supabase
           .from('profiles')
           .update({
@@ -97,7 +56,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (updateError) throw updateError;
 
-        // Set admin permissions
         const actions = [
           'add_product', 'delete_product', 'edit_product',
           'add_price_history', 'delete_price_history', 'edit_price_history'
@@ -126,11 +84,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  useEffect(() => {
+    setLoading(true);
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+      setSession(currentSession);
+      setUser(currentSession?.user ?? null);
+
+      if (event === 'SIGNED_IN') {
+        await checkFirstUserSetup(currentSession?.user ?? null);
+        toast({
+          title: "Signed in successfully",
+          description: "Welcome to Elites Project System!",
+        });
+        navigate("/dashboard");
+      } else if (event === 'SIGNED_OUT') {
+        toast({
+          title: "Signed out",
+          description: "You have been signed out successfully.",
+        });
+        setUser(null);
+        setSession(null);
+        navigate("/login");
+      }
+    });
+
+    supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
+      setSession(currentSession);
+      setUser(currentSession?.user ?? null);
+      if (currentSession?.user) {
+        await checkFirstUserSetup(currentSession.user);
+      }
+      setLoading(false);
+    }).catch((error) => {
+      console.error("Failed to get current session", error);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [toast, navigate]);
+
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      // navigation handled by onAuthStateChange listener
     } catch (error: any) {
       toast({
         title: "Login failed",
@@ -148,11 +149,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       if (!email) throw new Error("Email is required");
 
-      const [firstName, ...lastNameParts] = (name || '').split(' ');
+      const [firstName, ...lastNameParts] = (name || '').trim().split(' ');
       const lastName = lastNameParts.join(' ') || null;
       const displayName = name || email.split('@')[0];
 
-      // Check if this is the first user
+      // Check if first user
       const { count, error: countError } = await supabase
         .from('profiles')
         .select('*', { count: 'exact', head: true });
@@ -161,7 +162,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const isFirstUser = count === 0;
 
-      // Create the auth user
+      // Create user
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -177,7 +178,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) throw error;
 
-      // Create or update profile in your DB
       if (data.user) {
         const { error: profileError } = await supabase
           .from('profiles')
@@ -197,7 +197,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (profileError) throw profileError;
 
-        // If first user, set admin permissions immediately
         if (isFirstUser) {
           const actions = [
             'add_product', 'delete_product', 'edit_product',
@@ -264,15 +263,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    setLoading(true);
     try {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      setUser(null);
+      setSession(null);
       navigate("/login");
+      toast({
+        title: "Signed out",
+        description: "You have been signed out successfully.",
+      });
     } catch (error: any) {
       toast({
         title: "Logout failed",
         description: "Failed to log out. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
