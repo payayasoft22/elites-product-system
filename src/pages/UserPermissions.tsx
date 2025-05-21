@@ -6,29 +6,39 @@ import { useToast } from "@/hooks/use-toast";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+
+interface UserPermissions {
+  addProduct: boolean;
+  editProduct: boolean;
+  deleteProduct: boolean;
+  addPriceHistory: boolean;
+  deletePriceHistory: boolean;
+  editPriceHistory: boolean;
+}
 
 interface User {
   id: string;
   email: string;
   display_name?: string;
   role?: string;
-  permissions: {
-    addProduct: boolean;
-    editProduct: boolean;
-    deleteProduct: boolean;
-    addPriceHistory: boolean;
-    deletePriceHistory: boolean;
-    editPriceHistory: boolean;
-  };
+  permissions: UserPermissions;
 }
+
+const defaultPermissions: UserPermissions = {
+  addProduct: false,
+  editProduct: false,
+  deleteProduct: false,
+  addPriceHistory: false,
+  deletePriceHistory: false,
+  editPriceHistory: false,
+};
 
 const UserPermissions = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user: currentUser } = useAuth();
 
   useEffect(() => {
     fetchUsers();
@@ -44,19 +54,15 @@ const UserPermissions = () => {
 
       if (error) throw error;
 
-      const usersWithDefaults = (data || []).map(user => ({
+      const formattedUsers = (data || []).map(user => ({
         ...user,
-        permissions: user.permissions || {
-          addProduct: false,
-          editProduct: false,
-          deleteProduct: false,
-          addPriceHistory: false,
-          deletePriceHistory: false,
-          editPriceHistory: false,
+        permissions: {
+          ...defaultPermissions,
+          ...(user.permissions || {})
         },
       }));
 
-      setUsers(usersWithDefaults);
+      setUsers(formattedUsers);
     } catch (error: any) {
       console.error('Error fetching users:', error);
       toast({
@@ -69,13 +75,13 @@ const UserPermissions = () => {
     }
   };
 
-  const updatePermission = async (userId: string, permissionType: string, value: boolean) => {
+  const handlePermissionChange = async (userId: string, permissionType: keyof UserPermissions, newValue: boolean) => {
     try {
       // Find the user to update
       const userToUpdate = users.find(u => u.id === userId);
       if (!userToUpdate) return;
 
-      // Admins cannot have their permissions changed
+      // Block permission changes for admins
       if (userToUpdate.role === 'admin') {
         toast({
           title: 'Cannot modify admin permissions',
@@ -85,41 +91,42 @@ const UserPermissions = () => {
         return;
       }
 
-      // Update permissions locally first for instant UI feedback
+      // Optimistic UI update
       setUsers(prevUsers =>
-        prevUsers.map(u =>
-          u.id === userId
+        prevUsers.map(user =>
+          user.id === userId
             ? {
-                ...u,
+                ...user,
                 permissions: {
-                  ...u.permissions,
-                  [permissionType]: value,
+                  ...user.permissions,
+                  [permissionType]: newValue,
                 },
               }
-            : u
+            : user
         )
       );
 
-      // Update permissions in the database
+      // Prepare updated permissions
+      const updatedPermissions = {
+        ...userToUpdate.permissions,
+        [permissionType]: newValue
+      };
+
+      // Update in database
       const { error } = await supabase
         .from('profiles')
-        .update({ 
-          permissions: {
-            ...userToUpdate.permissions,
-            [permissionType]: value
-          }
-        })
+        .update({ permissions: updatedPermissions })
         .eq('id', userId);
 
       if (error) throw error;
 
       toast({
-        title: 'Permission Updated',
-        description: `Updated ${permissionType} permission for ${userToUpdate.display_name || userToUpdate.email}.`,
+        title: 'Success',
+        description: `Updated ${permissionType} permission`,
       });
     } catch (error: any) {
-      console.error('Error updating permission:', error);
-      // Revert local changes if update fails
+      console.error('Update failed:', error);
+      // Revert on error
       fetchUsers();
       toast({
         title: 'Error',
@@ -129,7 +136,7 @@ const UserPermissions = () => {
     }
   };
 
-  if (!user) {
+  if (!currentUser) {
     return (
       <DashboardLayout>
         <div className="flex justify-center items-center min-h-[300px]">
@@ -142,7 +149,7 @@ const UserPermissions = () => {
   return (
     <DashboardLayout>
       <Helmet>
-        <title>User Management | Elites Product Management</title>
+        <title>User Management | Product Management</title>
       </Helmet>
 
       <div className="space-y-6">
@@ -192,47 +199,53 @@ const UserPermissions = () => {
                             Admin has all permissions
                           </div>
                         ) : (
-                          <div className="flex flex-col gap-2">
-                            <div className="flex items-center gap-2">
-                              <span>Add Product</span>
-                              <Switch
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <h4 className="font-medium">Products</h4>
+                              <PermissionSwitch
+                                label="Add"
                                 checked={user.permissions.addProduct}
-                                onCheckedChange={checked => updatePermission(user.id, 'addProduct', checked)}
+                                onCheckedChange={(checked) => 
+                                  handlePermissionChange(user.id, 'addProduct', checked)
+                                }
                               />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span>Edit Product</span>
-                              <Switch
+                              <PermissionSwitch
+                                label="Edit"
                                 checked={user.permissions.editProduct}
-                                onCheckedChange={checked => updatePermission(user.id, 'editProduct', checked)}
+                                onCheckedChange={(checked) => 
+                                  handlePermissionChange(user.id, 'editProduct', checked)
+                                }
                               />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span>Delete Product</span>
-                              <Switch
+                              <PermissionSwitch
+                                label="Delete"
                                 checked={user.permissions.deleteProduct}
-                                onCheckedChange={checked => updatePermission(user.id, 'deleteProduct', checked)}
+                                onCheckedChange={(checked) => 
+                                  handlePermissionChange(user.id, 'deleteProduct', checked)
+                                }
                               />
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span>Add Price History</span>
-                              <Switch
+                            <div className="space-y-2">
+                              <h4 className="font-medium">Price History</h4>
+                              <PermissionSwitch
+                                label="Add"
                                 checked={user.permissions.addPriceHistory}
-                                onCheckedChange={checked => updatePermission(user.id, 'addPriceHistory', checked)}
+                                onCheckedChange={(checked) => 
+                                  handlePermissionChange(user.id, 'addPriceHistory', checked)
+                                }
                               />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span>Delete Price History</span>
-                              <Switch
-                                checked={user.permissions.deletePriceHistory}
-                                onCheckedChange={checked => updatePermission(user.id, 'deletePriceHistory', checked)}
-                              />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span>Edit Price History</span>
-                              <Switch
+                              <PermissionSwitch
+                                label="Edit"
                                 checked={user.permissions.editPriceHistory}
-                                onCheckedChange={checked => updatePermission(user.id, 'editPriceHistory', checked)}
+                                onCheckedChange={(checked) => 
+                                  handlePermissionChange(user.id, 'editPriceHistory', checked)
+                                }
+                              />
+                              <PermissionSwitch
+                                label="Delete"
+                                checked={user.permissions.deletePriceHistory}
+                                onCheckedChange={(checked) => 
+                                  handlePermissionChange(user.id, 'deletePriceHistory', checked)
+                                }
                               />
                             </div>
                           </div>
@@ -249,5 +262,25 @@ const UserPermissions = () => {
     </DashboardLayout>
   );
 };
+
+// Reusable switch component
+const PermissionSwitch = ({
+  label,
+  checked,
+  onCheckedChange,
+}: {
+  label: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) => (
+  <div className="flex items-center justify-between">
+    <span className="text-sm">{label}</span>
+    <Switch
+      checked={checked}
+      onCheckedChange={onCheckedChange}
+      className="data-[state=checked]:bg-green-500"
+    />
+  </div>
+);
 
 export default UserPermissions;
