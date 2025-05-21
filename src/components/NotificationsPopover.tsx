@@ -90,6 +90,20 @@ const NotificationsPopover = () => {
             </p>
           </div>
         );
+      case 'permission_change':
+        return (
+          <div>
+            <p className="font-medium">
+              Permission changed
+            </p>
+            <p className="text-muted-foreground text-sm">
+              {content.permission_type ? `Permission: ${content.permission_type}` : 'Permissions were modified'}
+            </p>
+            <p className="text-xs text-gray-400">
+              Changed by {content.changed_by || 'a user'} • {formatDistance(new Date(content.changed_at || notification.created_at), new Date(), { addSuffix: true })}
+            </p>
+          </div>
+        );
       case 'admin_request':
         return (
           <div>
