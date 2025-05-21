@@ -27,7 +27,7 @@ import {
 
 interface User {
   id: string;
-  name: string | null;
+  display_name: string | null;
   email: string;
   role: string;
   status: "active" | "inactive";
@@ -62,13 +62,13 @@ const Users = () => {
       try {
         const { data: profiles, error: profilesError } = await supabase
           .from('profiles')
-          .select('*');
+          .select('id, display_name, email, role, created_at, last_sign_in_at');
 
         if (profilesError) throw profilesError;
 
         return profiles.map((profile: any) => ({
           id: profile.id,
-          name: profile.first_name || profile.name || "N/A",
+          display_name: profile.display_name || "N/A",
           email: profile.email || "N/A",
           role: profile.role || "user",
           status: profile.last_sign_in_at ? "active" : "inactive",
@@ -149,7 +149,7 @@ const Users = () => {
 
   const filteredUsers = users?.filter(user => 
     user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.name?.toLowerCase().includes(searchTerm.toLowerCase())
+    user.display_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const formatDate = (dateString: string | undefined | null) => {
@@ -161,8 +161,10 @@ const Users = () => {
     }
   };
 
-  const getUserInitials = (name: string | null) => {
-    return name ? name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2) : "U";
+  const getUserInitials = (display_name: string | null) => {
+    return display_name 
+      ? display_name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2) 
+      : "U";
   };
 
   const getRoleBadgeColor = (role: string) => {
@@ -239,7 +241,6 @@ const Users = () => {
             )}
           </TabsList>
 
-          {/* All Users Tab */}
           <TabsContent value="all_users" className="mt-0">
             <Card>
               <CardHeader>
@@ -280,12 +281,12 @@ const Users = () => {
                             <div className="flex items-center gap-3">
                               <Avatar>
                                 <AvatarFallback>
-                                  {getUserInitials(user.name)}
+                                  {getUserInitials(user.display_name)}
                                 </AvatarFallback>
                               </Avatar>
                               <div>
                                 <div className="font-medium flex items-center gap-2">
-                                  {user.name}
+                                  {user.display_name}
                                   {currentUser?.id === user.id && (
                                     <Badge variant="outline">You</Badge>
                                   )}
@@ -364,7 +365,6 @@ const Users = () => {
             </Card>
           </TabsContent>
 
-          {/* Active Users Tab */}
           <TabsContent value="active_users" className="mt-0">
             <Card>
               <CardHeader>
@@ -394,11 +394,11 @@ const Users = () => {
                             <div className="flex items-center gap-3">
                               <Avatar>
                                 <AvatarFallback className="bg-green-100 text-green-800">
-                                  {getUserInitials(user.name)}
+                                  {getUserInitials(user.display_name)}
                                 </AvatarFallback>
                               </Avatar>
                               <div>
-                                {user.name}
+                                {user.display_name}
                                 {currentUser?.id === user.id && " (You)"}
                               </div>
                             </div>
@@ -418,7 +418,6 @@ const Users = () => {
             </Card>
           </TabsContent>
 
-          {/* Admin Requests Tab */}
           {isAdmin && (
             <TabsContent value="admin_requests" className="mt-0">
               <Card>
@@ -442,11 +441,14 @@ const Users = () => {
                           <AlertCircle className="h-10 w-10 text-red-400" />
                         </div>
                       </div>
-                      <p className="text-red-500">Failed to load requests</p>
+                      <p className="text-red-500 mb-2">Failed to load requests</p>
+                      <p className="text-sm text-red-400 mb-4">
+                        {adminRequestsError.message || "Database error occurred"}
+                      </p>
                       <Button 
                         variant="outline" 
                         className="mt-4"
-                        onClick={() => queryClient.invalidateQueries(['admin_requests'])}
+                        onClick={() => queryClient.invalidateQueries(['admin_requests', 'all'])}
                       >
                         Retry
                       </Button>
@@ -476,11 +478,11 @@ const Users = () => {
                               <div className="flex items-center gap-3">
                                 <Avatar>
                                   <AvatarFallback className="bg-yellow-100 text-yellow-800">
-                                    {getUserInitials(request.name)}
+                                    {getUserInitials(request.display_name)}
                                   </AvatarFallback>
                                 </Avatar>
                                 <div>
-                                  <div className="font-medium">{request.name}</div>
+                                  <div className="font-medium">{request.display_name}</div>
                                   <div className="text-sm text-muted-foreground">{request.email}</div>
                                 </div>
                               </div>
