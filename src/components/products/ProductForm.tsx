@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -7,9 +6,26 @@ import { Clock } from "lucide-react";
 import * as z from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
 
 export const formSchema = z.object({
-  prodcode: z.string().min(2, "Product code must be at least 2 characters"),
+  prodcode: z.string()
+    .min(2, "Product code must be at least 2 characters")
+    .max(6, "Product code cannot exceed 6 characters")
+    .refine(async (code) => {
+      if (!code) return true;
+      const { data, error } = await supabase
+        .from('product')
+        .select('prodcode')
+        .eq('prodcode', code)
+        .maybeSingle();
+      
+      if (error) throw error;
+      return !data;
+    }, {
+      message: "Product code already exists",
+    }),
   description: z.string().min(3, "Description must be at least 3 characters"),
   unit: z.string().min(2, "Unit must be 2-3 characters").max(3, "Unit must be 2-3 characters"),
   unitprice: z.coerce.number().min(0.01, "Price must be greater than 0")
@@ -41,6 +57,7 @@ const ProductForm = ({
   tempProduct,
   setTempProduct
 }: ProductFormProps) => {
+  const { toast } = useToast();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -51,11 +68,39 @@ const ProductForm = ({
     }
   });
 
-  const handleSubmit = form.handleSubmit(onSubmit);
+  const handleSubmit = async (values: z.infer<typeof formSchema>) => {
+    try {
+      // Additional validation in case the refine check didn't catch it
+      if (values.prodcode.length > 6) {
+        throw new Error("Product code cannot exceed 6 characters");
+      }
+
+      // Check for duplicates again right before submission
+      if (!isEdit) {
+        const { data: existingProduct } = await supabase
+          .from('product')
+          .select('prodcode')
+          .eq('prodcode', values.prodcode)
+          .maybeSingle();
+
+        if (existingProduct) {
+          throw new Error("Product code already exists");
+        }
+      }
+
+      await onSubmit(values);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to submit form",
+        variant: "destructive",
+      });
+    }
+  };
   
   return (
     <Form {...form}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
         <FormField
           control={form.control}
           name="prodcode"
@@ -64,15 +109,17 @@ const ProductForm = ({
               <FormLabel>Product Code</FormLabel>
               <FormControl>
                 <Input 
-                  placeholder="Enter product code" 
+                  placeholder="Enter product code (6 chars max)" 
                   {...field} 
                   disabled={isEdit}
+                  maxLength={6}
                   onChange={(e) => {
-                    field.onChange(e);
+                    const value = e.target.value.toUpperCase(); // Convert to uppercase
+                    field.onChange(value);
                     if (setTempProduct && tempProduct) {
                       setTempProduct({
                         ...tempProduct,
-                        prodcode: e.target.value
+                        prodcode: value
                       });
                     }
                   }}
@@ -119,11 +166,12 @@ const ProductForm = ({
                   {...field}
                   maxLength={3}
                   onChange={(e) => {
-                    field.onChange(e);
+                    const value = e.target.value.toUpperCase(); // Convert to uppercase
+                    field.onChange(value);
                     if (setTempProduct && tempProduct) {
                       setTempProduct({
                         ...tempProduct,
-                        unit: e.target.value
+                        unit: value
                       });
                     }
                   }}
@@ -184,7 +232,9 @@ const ProductForm = ({
           >
             Cancel
           </Button>
-          <Button type="submit">{isEdit ? "Save Changes" : "Add Product"}</Button>
+          <Button type="submit" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting ? "Processing..." : isEdit ? "Save Changes" : "Add Product"}
+          </Button>
         </div>
       </form>
     </Form>
