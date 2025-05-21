@@ -87,28 +87,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     setLoading(true);
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+      // Only handle SIGNED_IN events here
       if (event === 'SIGNED_IN') {
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
         await checkFirstUserSetup(currentSession?.user ?? null);
         toast({
           title: "Signed in successfully",
           description: "Welcome to Elites Project System!",
         });
         navigate("/dashboard");
-      } else if (event === 'SIGNED_OUT') {
-        toast({
-          title: "Signed out",
-          description: "You have been signed out successfully.",
-        });
-        setUser(null);
-        setSession(null);
-        navigate("/login");
       }
+      // SIGNED_OUT events are handled by the manual logout function
     });
 
     supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
@@ -131,7 +122,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      // navigation handled by onAuthStateChange listener
     } catch (error: any) {
       toast({
         title: "Login failed",
@@ -172,7 +162,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             last_name: lastName,
             full_name: name || displayName,
           },
-          emailRedirectTo: ${window.location.origin}/dashboard,
+          emailRedirectTo: `${window.location.origin}/dashboard`,
         },
       });
 
@@ -243,7 +233,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: ${window.location.origin}/reset-password,
+        redirectTo: `${window.location.origin}/reset-password`,
       });
       if (error) throw error;
       toast({
@@ -265,11 +255,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     setLoading(true);
     try {
+      // Clear all cookies under the current domain
+      document.cookie.split(';').forEach(cookie => {
+        const [name] = cookie.split('=');
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname}`;
+      });
+
+      // Sign out from Supabase
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+      
+      // Clear local state
       setUser(null);
       setSession(null);
+      
+      // Navigate to login
       navigate("/login");
+      
       toast({
         title: "Signed out",
         description: "You have been signed out successfully.",
@@ -277,9 +279,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       toast({
         title: "Logout failed",
-        description: "Failed to log out. Please try again.",
+        description: error.message || "Failed to log out. Please try again.",
         variant: "destructive",
       });
+      throw error;
     } finally {
       setLoading(false);
     }
