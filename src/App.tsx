@@ -57,14 +57,14 @@ function App() {
                     </ProtectedRoute>
                   } 
                 />
-                <Route 
-                  path="/price-history" 
-                  element={
-                    <ProtectedRoute>
-                      <PriceHistory />
-                    </ProtectedRoute>
-                  } 
-                />
+               <Route 
+  path="/price-history/:prodcode" 
+  element={
+    <ProtectedRoute>
+      <PriceHistory />
+    </ProtectedRoute>
+  } 
+/>
                 <Route 
                   path="/settings" 
                   element={
