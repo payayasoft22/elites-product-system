@@ -58,9 +58,11 @@ const UserPermissions = () => {
 
   const handlePermissionChange = async (userId: string, permissionType: keyof typeof PermissionActions, newValue: boolean) => {
     try {
+      // Find the user to update
       const userToUpdate = users.find(u => u.id === userId);
       if (!userToUpdate) return;
 
+      // Block permission changes for admins
       if (userToUpdate.role === 'admin') {
         toast({
           title: 'Cannot modify admin permissions',
@@ -70,6 +72,7 @@ const UserPermissions = () => {
         return;
       }
 
+      // Optimistic UI update
       setUsers(prevUsers =>
         prevUsers.map(user =>
           user.id === userId
@@ -84,11 +87,13 @@ const UserPermissions = () => {
         )
       );
 
+      // Prepare updated permissions
       const updatedPermissions = {
         ...userToUpdate.permissions,
         [permissionType]: newValue
       };
 
+      // Update in database
       const { error } = await supabase
         .from('profiles')
         .update({ permissions: updatedPermissions })
@@ -101,9 +106,11 @@ const UserPermissions = () => {
         description: `Updated ${permissionType} permission`,
       });
 
+      // Refresh permissions in other components
       refreshPermissions();
     } catch (error: any) {
       console.error('Update failed:', error);
+      // Revert on error
       fetchUsers();
       toast({
         title: 'Error',
@@ -257,24 +264,8 @@ const PermissionSwitch: React.FC<PermissionSwitchProps> = ({
       <Switch
         checked={checked}
         onCheckedChange={onCheckedChange}
-        className="
-          relative inline-flex h-6 w-11 items-center rounded-full
-          transition-colors focus-visible:outline-none focus-visible:ring-2
-          focus-visible:ring-ring focus-visible:ring-offset-2
-          disabled:cursor-not-allowed disabled:opacity-50
-          data-[state=checked]:bg-primary
-          data-[state=unchecked]:bg-input
-        "
-      >
-        <span
-          className="
-            pointer-events-none inline-block h-5 w-5 transform rounded-full
-            bg-background shadow-lg ring-0 transition-transform
-            data-[state=checked]:translate-x-5
-            data-[state=unchecked]:translate-x-0
-          "
-        />
-      </Switch>
+        className="data-[state=checked]:bg-primary"
+      />
     </div>
   );
 };
