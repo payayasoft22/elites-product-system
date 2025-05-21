@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { usePermission } from "@/hooks/usePermission";
 
 interface PriceHistoryItem {
   effdate: string;
@@ -29,6 +30,7 @@ const PriceHistory = () => {
   const { prodcode } = useParams<{ prodcode: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { isAdmin } = usePermission();
   const [loading, setLoading] = useState(true);
   const [productDetails, setProductDetails] = useState<{
     prodcode: string;
@@ -40,8 +42,16 @@ const PriceHistory = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedPrice, setSelectedPrice] = useState<PriceHistoryItem | null>(null);
-  const [newPrice, setNewPrice] = useState<string>("");
+  const [newPrice, setNewPrice] = useState<string>(""); 
   const [newDate, setNewDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+
+  const showPermissionDenied = () => {
+    toast({
+      title: "Permission Denied",
+      description: "You need admin privileges to access this feature. Please request admin access.",
+      variant: "destructive",
+    });
+  };
 
   useEffect(() => {
     const fetchProductAndPriceHistory = async () => {
@@ -88,7 +98,6 @@ const PriceHistory = () => {
     fetchProductAndPriceHistory();
   }, [prodcode, navigate, toast]);
 
-  // Format date for display
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
@@ -98,13 +107,16 @@ const PriceHistory = () => {
     }
   };
 
-  // Format price for display
   const formatPrice = (price: number | null) => {
     if (price === null) return "N/A";
     return `$${price.toFixed(2)}`;
   };
 
   const handleAddPrice = async () => {
+    if (!isAdmin) {
+      showPermissionDenied();
+      return;
+    }
     try {
       if (!prodcode || !newPrice || !newDate) {
         toast({
@@ -162,6 +174,10 @@ const PriceHistory = () => {
   };
 
   const handleEditPrice = async () => {
+    if (!isAdmin) {
+      showPermissionDenied();
+      return;
+    }
     try {
       if (!prodcode || !newPrice || !selectedPrice) {
         toast({
@@ -219,6 +235,10 @@ const PriceHistory = () => {
   };
 
   const handleDeletePrice = async () => {
+    if (!isAdmin) {
+      showPermissionDenied();
+      return;
+    }
     try {
       if (!prodcode || !selectedPrice) {
         return;
@@ -274,10 +294,15 @@ const PriceHistory = () => {
           </div>
           <Button
             onClick={() => {
+              if (!isAdmin) {
+                showPermissionDenied();
+                return;
+              }
               setNewPrice("");
               setNewDate(format(new Date(), "yyyy-MM-dd"));
               setIsAddDialogOpen(true);
             }}
+            disabled={!isAdmin}
           >
             <Plus className="mr-2 h-4 w-4" /> Add Price History
           </Button>
@@ -319,7 +344,7 @@ const PriceHistory = () => {
                     <TableRow>
                       <TableHead>Effective Date</TableHead>
                       <TableHead>Price</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      {isAdmin && <TableHead className="text-right">Actions</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -327,31 +352,35 @@ const PriceHistory = () => {
                       <TableRow key={index}>
                         <TableCell>{formatDate(item.effdate)}</TableCell>
                         <TableCell>{formatPrice(item.unitprice)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end space-x-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedPrice(item);
-                                setNewPrice(item.unitprice?.toString() || "");
-                                setIsEditDialogOpen(true);
-                              }}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedPrice(item);
-                                setIsDeleteDialogOpen(true);
-                              }}
-                            >
-                              Delete
-                            </Button>
-                          </div>
-                        </TableCell>
+                        {isAdmin && (
+                          <TableCell className="text-right">
+                            <div className="flex justify-end space-x-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedPrice(item);
+                                  setNewPrice(item.unitprice?.toString() || "");
+                                  setIsEditDialogOpen(true);
+                                }}
+                                disabled={!isAdmin}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedPrice(item);
+                                  setIsDeleteDialogOpen(true);
+                                }}
+                                disabled={!isAdmin}
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -385,6 +414,7 @@ const PriceHistory = () => {
                   type="number"
                   step="0.01"
                   min="0"
+                  disabled={!isAdmin}
                 />
               </div>
             </div>
@@ -398,6 +428,7 @@ const PriceHistory = () => {
                 onChange={(e) => setNewDate(e.target.value)}
                 className="col-span-3"
                 type="date"
+                disabled={!isAdmin}
               />
             </div>
           </div>
@@ -405,7 +436,11 @@ const PriceHistory = () => {
             <DialogClose asChild>
               <Button variant="outline">Cancel</Button>
             </DialogClose>
-            <Button type="submit" onClick={handleAddPrice}>
+            <Button
+              type="submit"
+              onClick={handleAddPrice}
+              disabled={!isAdmin}
+            >
               Add Price
             </Button>
           </DialogFooter>
@@ -417,7 +452,7 @@ const PriceHistory = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Price</DialogTitle>
-            <DialogDescription>Update the price for {formatDate(selectedPrice?.effdate || "")}</DialogDescription>
+            <DialogDescription>Edit price entry for {formatDate(selectedPrice?.effdate || "")}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
@@ -435,6 +470,7 @@ const PriceHistory = () => {
                   type="number"
                   step="0.01"
                   min="0"
+                  disabled={!isAdmin}
                 />
               </div>
             </div>
@@ -443,14 +479,18 @@ const PriceHistory = () => {
             <DialogClose asChild>
               <Button variant="outline">Cancel</Button>
             </DialogClose>
-            <Button type="submit" onClick={handleEditPrice}>
+            <Button
+              type="submit"
+              onClick={handleEditPrice}
+              disabled={!isAdmin}
+            >
               Update Price
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Price Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -463,7 +503,11 @@ const PriceHistory = () => {
             <DialogClose asChild>
               <Button variant="outline">Cancel</Button>
             </DialogClose>
-            <Button variant="destructive" onClick={handleDeletePrice}>
+            <Button
+              variant="destructive"
+              onClick={handleDeletePrice}
+              disabled={!isAdmin}
+            >
               Delete
             </Button>
           </DialogFooter>
