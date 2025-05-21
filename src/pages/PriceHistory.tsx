@@ -33,7 +33,8 @@ const PriceHistory = () => {
   const { 
     canAddPriceHistory,
     canEditPriceHistory,
-    canDeletePriceHistory
+    canDeletePriceHistory,
+    isAdmin, // Assuming 'isAdmin' is used to determine if the user is an admin
   } = usePermission();
   const [loading, setLoading] = useState(true);
   const [productDetails, setProductDetails] = useState<{
@@ -46,8 +47,7 @@ const PriceHistory = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedPrice, setSelectedPrice] = useState<PriceHistoryItem | null>(null);
-  const [newPrice, setNewPrice] = useState<string>("");
-
+  const [newPrice, setNewPrice] = useState<string>("");  
   const [newDate, setNewDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
 
   const showPermissionDenied = () => {
@@ -158,7 +158,7 @@ const PriceHistory = () => {
         .order("effdate", { ascending: false });
 
       if (fetchError) throw fetchError;
-      setPriceHistory(updatedData || []); 
+      setPriceHistory(updatedData || []);
 
       setIsAddDialogOpen(false);
       setNewPrice("");
@@ -219,7 +219,7 @@ const PriceHistory = () => {
         .order("effdate", { ascending: false });
 
       if (fetchError) throw fetchError;
-      setPriceHistory(updatedData || []); 
+      setPriceHistory(updatedData || []);
 
       setIsEditDialogOpen(false);
       setSelectedPrice(null);
@@ -265,7 +265,7 @@ const PriceHistory = () => {
         .order("effdate", { ascending: false });
 
       if (fetchError) throw fetchError;
-      setPriceHistory(updatedData || []); 
+      setPriceHistory(updatedData || []);
 
       setIsDeleteDialogOpen(false);
       setSelectedPrice(null);
@@ -286,92 +286,64 @@ const PriceHistory = () => {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Button variant="ghost" onClick={() => navigate("/products")}>
-              <ArrowLeft size={16} />
-              Back to Products
-            </Button>
-            <CardTitle>{productDetails?.description || "Product not found"}</CardTitle>
-          </div>
-          <Button
-            variant="primary"
-            onClick={() => setIsAddDialogOpen(true)}
-            disabled={!canAddPriceHistory}
-          >
-            <Plus size={16} />
-            Add Price
-          </Button>
-        </div>
+      <div className="space-y-4">
         {loading ? (
-          <div className="flex justify-center">
-            <Loader2 className="animate-spin" size={24} />
-          </div>
+          <Loader2 className="animate-spin h-6 w-6" />
         ) : (
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Price History</CardTitle>
-                <CardDescription>
-                  <span className="flex items-center space-x-2">
-                    <Calendar size={16} />
-                    <span>{productDetails?.unit}</span>
-                  </span>
-                </CardDescription>
-              </div>
+              <CardTitle>{productDetails?.description || "Product Not Found"}</CardTitle>
+              <CardDescription>Product Code: {productDetails?.prodcode}</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
+                    <TableHead>Effective Date</TableHead>
                     <TableHead>Price</TableHead>
-                    <TableHead>Actions</TableHead>
+                    {isAdmin && (
+                      <TableHead className="text-center">Actions</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {priceHistory.map((item, index) => (
-                    <TableRow key={index}>
+                  {priceHistory.map((item) => (
+                    <TableRow key={item.effdate}>
                       <TableCell>{formatDate(item.effdate)}</TableCell>
                       <TableCell>{formatPrice(item.unitprice)}</TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
+                      {isAdmin && (
+                        <TableCell className="text-center">
                           <Button
                             variant="outline"
                             onClick={() => {
-                              if (canEditPriceHistory) {
-                                setSelectedPrice(item);
-                                setNewPrice(item.unitprice?.toString() || "");
-                                setIsEditDialogOpen(true);
-                              } else {
-                                showPermissionDenied();
-                              }
+                              setSelectedPrice(item);
+                              setIsEditDialogOpen(true);
                             }}
-                            disabled={!canEditPriceHistory}
                           >
                             Edit
                           </Button>
                           <Button
-                            variant="outline"
+                            variant="destructive"
                             onClick={() => {
-                              if (canDeletePriceHistory) {
-                                setSelectedPrice(item);
-                                setIsDeleteDialogOpen(true);
-                              } else {
-                                showPermissionDenied();
-                              }
+                              setSelectedPrice(item);
+                              setIsDeleteDialogOpen(true);
                             }}
-                            disabled={!canDeletePriceHistory}
                           >
                             Delete
                           </Button>
-                        </div>
-                      </TableCell>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+
+              {/* Add Button */}
+              {isAdmin && (
+                <Button variant="outline" onClick={() => setIsAddDialogOpen(true)} className="mt-4">
+                  <Plus className="mr-2" /> Add Price
+                </Button>
+              )}
             </CardContent>
           </Card>
         )}
@@ -381,36 +353,36 @@ const PriceHistory = () => {
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Price History</DialogTitle>
+            <DialogTitle>Add Price</DialogTitle>
+            <DialogDescription>Enter the price and effective date for this product</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="newDate">Effective Date</Label>
+              <Label htmlFor="new-price">Price</Label>
               <Input
-                id="newDate"
+                id="new-price"
+                type="number"
+                value={newPrice}
+                onChange={(e) => setNewPrice(e.target.value)}
+                min="0"
+                step="0.01"
+              />
+            </div>
+            <div>
+              <Label htmlFor="new-date">Effective Date</Label>
+              <Input
+                id="new-date"
                 type="date"
                 value={newDate}
                 onChange={(e) => setNewDate(e.target.value)}
               />
             </div>
-            <div>
-              <Label htmlFor="newPrice">Price</Label>
-              <Input
-                id="newPrice"
-                type="number"
-                value={newPrice}
-                onChange={(e) => setNewPrice(e.target.value)}
-                placeholder="Enter new price"
-              />
-            </div>
           </div>
           <DialogFooter>
-            <Button variant="destructive" onClick={() => setIsAddDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleAddPrice}>
-              Add Price
-            </Button>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={handleAddPrice}>Add</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -419,36 +391,27 @@ const PriceHistory = () => {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Price History</DialogTitle>
+            <DialogTitle>Edit Price</DialogTitle>
+            <DialogDescription>Modify the price for this product</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="newDate">Effective Date</Label>
+              <Label htmlFor="edit-price">New Price</Label>
               <Input
-                id="newDate"
-                type="date"
-                value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="newPrice">Price</Label>
-              <Input
-                id="newPrice"
+                id="edit-price"
                 type="number"
                 value={newPrice}
                 onChange={(e) => setNewPrice(e.target.value)}
-                placeholder="Enter new price"
+                min="0"
+                step="0.01"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="destructive" onClick={() => setIsEditDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleEditPrice}>
-              Update Price
-            </Button>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={handleEditPrice}>Update</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -457,16 +420,14 @@ const PriceHistory = () => {
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Price History</DialogTitle>
+            <DialogTitle>Delete Price</DialogTitle>
+            <DialogDescription>Are you sure you want to delete this price history record?</DialogDescription>
           </DialogHeader>
-          <DialogDescription>
-            Are you sure you want to delete this price history record? This action cannot be undone.
-          </DialogDescription>
           <DialogFooter>
-            <Button variant="destructive" onClick={() => setIsDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="outline" onClick={handleDeletePrice}>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button variant="destructive" onClick={handleDeletePrice}>
               Delete
             </Button>
           </DialogFooter>
