@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
@@ -15,12 +16,14 @@ import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
+import { useAdminRequests } from "@/hooks/useAdminRequests";
 import { 
   AlertCircle, 
   Check, 
   Shield, 
   User as UserIcon, 
   X, 
+  Filter,
   RefreshCcw
 } from "lucide-react";
 
@@ -34,17 +37,6 @@ interface User {
   last_sign_in_at?: string | null;
 }
 
-interface AdminRequest {
-  id: string;
-  user_id: string;
-  name: string;
-  status: "pending" | "approved" | "rejected";
-  requested_at: string;
-  profile?: {
-    email?: string;
-  };
-}
-
 const Users = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeUsers, setActiveUsers] = useState<User[]>([]);
@@ -53,177 +45,15 @@ const Users = () => {
   const { user: currentUser } = useAuth();
   const { isAdmin } = usePermission();
   const queryClient = useQueryClient();
-  const [pendingRequests, setPendingRequests] = useState<AdminRequest[]>([]);
-  const [hasPendingRequest, setHasPendingRequest] = useState(false);
+  const { 
+    allRequests, 
+    requestAdminRole, 
+    approveRequest, 
+    rejectRequest,
+    hasPendingRequest 
+  } = useAdminRequests();
 
-  // Query to fetch admin requests
-  const { data: adminRequests, refetch: refetchRequests } = useQuery({
-    queryKey: ["admin_requests"],
-    queryFn: async () => {
-      try {
-        const { data, error } = await supabase
-          .from('admin_requests')
-          .select(`
-            id,
-            user_id,
-            name,
-            status,
-            requested_at,
-            profiles:user_id (email)
-          `)
-          .order('requested_at', { ascending: false });
-
-        if (error) throw error;
-
-        const requests = data.map((req: any) => ({
-          id: req.id,
-          user_id: req.user_id,
-          name: req.name,
-          status: req.status,
-          requested_at: req.requested_at,
-          profile: req.profiles
-        }));
-
-        setPendingRequests(requests.filter((req: AdminRequest) => req.status === "pending"));
-        
-        if (currentUser) {
-          const hasPending = requests.some(
-            (req: AdminRequest) => req.user_id === currentUser.id && req.status === "pending"
-          );
-          setHasPendingRequest(hasPending);
-        }
-
-        return requests;
-      } catch (error) {
-        console.error("Error fetching admin requests:", error);
-        toast({
-          title: "Error",
-          description: "Failed to fetch admin requests.",
-          variant: "destructive",
-        });
-        return [];
-      }
-    }
-  });
-
-  // Mutation to request admin role
-  const requestAdminRole = useMutation({
-    mutationFn: async () => {
-      if (!currentUser) throw new Error("User not authenticated");
-      
-      // Check if user already has a pending request
-      const { data: existingRequests, error: existingError } = await supabase
-        .from('admin_requests')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .eq('status', 'pending');
-
-      if (existingError) throw existingError;
-      if (existingRequests && existingRequests.length > 0) {
-        throw new Error("You already have a pending admin request");
-      }
-
-      // Get user profile
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('first_name')
-        .eq('id', currentUser.id)
-        .single();
-
-      if (profileError) throw profileError;
-
-      // Create new request
-      const { error } = await supabase
-        .from('admin_requests')
-        .insert([{
-          user_id: currentUser.id,
-          name: profile.first_name || "Unknown",
-          status: 'pending',
-          requested_at: new Date().toISOString()
-        }]);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast({
-        title: "Request submitted",
-        description: "Your admin role request has been submitted for review.",
-      });
-      refetchRequests();
-    },
-    onError: (error) => {
-      toast({
-        title: "Request failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  });
-
-  // Mutation to approve admin request
-  const approveRequest = useMutation({
-    mutationFn: async ({ requestId, userId }: { requestId: string; userId: string }) => {
-      // Update user role to admin
-      const { error: roleError } = await supabase
-        .from('profiles')
-        .update({ role: 'admin' })
-        .eq('id', userId);
-
-      if (roleError) throw roleError;
-
-      // Update request status
-      const { error: requestError } = await supabase
-        .from('admin_requests')
-        .update({ status: 'approved' })
-        .eq('id', requestId);
-
-      if (requestError) throw requestError;
-
-      return { requestId, userId };
-    },
-    onSuccess: () => {
-      toast({
-        title: "Request approved",
-        description: "User has been granted admin privileges.",
-      });
-      queryClient.invalidateQueries({ queryKey: ["users"] });
-      refetchRequests();
-    },
-    onError: (error) => {
-      toast({
-        title: "Approval failed",
-        description: error.message || "Failed to approve request.",
-        variant: "destructive",
-      });
-    }
-  });
-
-  // Mutation to reject admin request
-  const rejectRequest = useMutation({
-    mutationFn: async (requestId: string) => {
-      const { error } = await supabase
-        .from('admin_requests')
-        .update({ status: 'rejected' })
-        .eq('id', requestId);
-
-      if (error) throw error;
-      return requestId;
-    },
-    onSuccess: () => {
-      toast({
-        title: "Request rejected",
-        description: "Admin request has been rejected.",
-      });
-      refetchRequests();
-    },
-    onError: (error) => {
-      toast({
-        title: "Rejection failed",
-        description: error.message || "Failed to reject request.",
-        variant: "destructive",
-      });
-    }
-  });
+  const pendingRequests = allRequests?.filter(req => req.status === "pending") || [];
 
   // Query to fetch all registered users from Supabase Auth
   const { data: users, isLoading, error, refetch } = useQuery({
@@ -636,9 +466,7 @@ const Users = () => {
                                 </Avatar>
                                 <div>
                                   <div className="font-medium">{request.name}</div>
-                                  <div className="text-sm text-muted-foreground">
-                                    {request.profile?.email || "No email"}
-                                  </div>
+                                  <div className="text-sm text-muted-foreground">{request.email}</div>
                                 </div>
                               </div>
                             </TableCell>
