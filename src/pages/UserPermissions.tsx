@@ -1,3 +1,4 @@
+// src/components/UserPermissions.tsx
 import React, { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
@@ -72,6 +73,16 @@ const UserPermissions = () => {
         return;
       }
 
+      // Block permission changes if current user is not admin
+      if (!isAdmin) {
+        toast({
+          title: 'Permission denied',
+          description: 'Only admins can modify user permissions',
+          variant: 'destructive',
+        });
+        return;
+      }
+
       // Optimistic UI update
       setUsers(prevUsers =>
         prevUsers.map(user =>
@@ -114,7 +125,7 @@ const UserPermissions = () => {
       fetchUsers();
       toast({
         title: 'Error',
-        description: 'Failed to update permission',
+        description: error.message || 'Failed to update permission',
         variant: 'destructive',
       });
     }
@@ -125,6 +136,16 @@ const UserPermissions = () => {
       <DashboardLayout>
         <div className="flex justify-center items-center min-h-[300px]">
           <p>Loading user information...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <DashboardLayout>
+        <div className="flex justify-center items-center min-h-[300px]">
+          <p>You don't have permission to access this page.</p>
         </div>
       </DashboardLayout>
     );
@@ -188,23 +209,23 @@ const UserPermissions = () => {
                               <h4 className="font-medium">Products</h4>
                               <PermissionSwitch
                                 label="Add"
-                                checked={user.permissions[PermissionActions.ADD_PRODUCT] || false}
+                                checked={!!user.permissions[PermissionActions.ADD_PRODUCT]}
                                 onCheckedChange={(checked) => 
-                                  handlePermissionChange(user.id, 'ADD_PRODUCT', checked)
+                                  handlePermissionChange(user.id, PermissionActions.ADD_PRODUCT, checked)
                                 }
                               />
                               <PermissionSwitch
                                 label="Edit"
-                                checked={user.permissions[PermissionActions.EDIT_PRODUCT] || false}
+                                checked={!!user.permissions[PermissionActions.EDIT_PRODUCT]}
                                 onCheckedChange={(checked) => 
-                                  handlePermissionChange(user.id, 'EDIT_PRODUCT', checked)
+                                  handlePermissionChange(user.id, PermissionActions.EDIT_PRODUCT, checked)
                                 }
                               />
                               <PermissionSwitch
                                 label="Delete"
-                                checked={user.permissions[PermissionActions.DELETE_PRODUCT] || false}
+                                checked={!!user.permissions[PermissionActions.DELETE_PRODUCT]}
                                 onCheckedChange={(checked) => 
-                                  handlePermissionChange(user.id, 'DELETE_PRODUCT', checked)
+                                  handlePermissionChange(user.id, PermissionActions.DELETE_PRODUCT, checked)
                                 }
                               />
                             </div>
@@ -212,23 +233,23 @@ const UserPermissions = () => {
                               <h4 className="font-medium">Price History</h4>
                               <PermissionSwitch
                                 label="Add"
-                                checked={user.permissions[PermissionActions.ADD_PRICE_HISTORY] || false}
+                                checked={!!user.permissions[PermissionActions.ADD_PRICE_HISTORY]}
                                 onCheckedChange={(checked) => 
-                                  handlePermissionChange(user.id, 'ADD_PRICE_HISTORY', checked)
+                                  handlePermissionChange(user.id, PermissionActions.ADD_PRICE_HISTORY, checked)
                                 }
                               />
                               <PermissionSwitch
                                 label="Edit"
-                                checked={user.permissions[PermissionActions.EDIT_PRICE_HISTORY] || false}
+                                checked={!!user.permissions[PermissionActions.EDIT_PRICE_HISTORY]}
                                 onCheckedChange={(checked) => 
-                                  handlePermissionChange(user.id, 'EDIT_PRICE_HISTORY', checked)
+                                  handlePermissionChange(user.id, PermissionActions.EDIT_PRICE_HISTORY, checked)
                                 }
                               />
                               <PermissionSwitch
                                 label="Delete"
-                                checked={user.permissions[PermissionActions.DELETE_PRICE_HISTORY] || false}
+                                checked={!!user.permissions[PermissionActions.DELETE_PRICE_HISTORY]}
                                 onCheckedChange={(checked) => 
-                                  handlePermissionChange(user.id, 'DELETE_PRICE_HISTORY', checked)
+                                  handlePermissionChange(user.id, PermissionActions.DELETE_PRICE_HISTORY, checked)
                                 }
                               />
                             </div>
