@@ -56,7 +56,6 @@ const Users = () => {
 
   const pendingRequests = allRequests?.filter(req => req.status === "pending") || [];
 
-  // Fetch all users
   const { data: users, isLoading, error, refetch } = useQuery({
     queryKey: ["users"],
     queryFn: async () => {
@@ -88,7 +87,6 @@ const Users = () => {
     }
   });
 
-  // Update user role mutation
   const updateUserRole = useMutation({
     mutationFn: async ({ userId, newRole }: { userId: string; newRole: string }) => {
       const { error } = await supabase
@@ -113,7 +111,6 @@ const Users = () => {
     }
   });
 
-  // Track active users
   useEffect(() => {
     const channel = supabase.channel('user_presence')
       .on('presence', { event: 'sync' }, () => {
@@ -150,7 +147,6 @@ const Users = () => {
     };
   }, [users, currentUser]);
 
-  // Helper functions
   const filteredUsers = users?.filter(user => 
     user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.name?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -175,7 +171,6 @@ const Users = () => {
       : "bg-blue-100 text-blue-800 border-blue-300";
   };
 
-  // Admin request handlers
   const handleRequestAdmin = async () => {
     try {
       await requestAdminRole.mutateAsync();
@@ -447,14 +442,11 @@ const Users = () => {
                           <AlertCircle className="h-10 w-10 text-red-400" />
                         </div>
                       </div>
-                      <p className="text-red-500 mb-2">Failed to load requests</p>
-                      <p className="text-sm text-red-400 mb-4">
-                        {adminRequestsError.message || "Database error occurred"}
-                      </p>
+                      <p className="text-red-500">Failed to load requests</p>
                       <Button 
                         variant="outline" 
                         className="mt-4"
-                        onClick={() => queryClient.invalidateQueries(['admin_requests', 'all'])}
+                        onClick={() => queryClient.invalidateQueries(['admin_requests'])}
                       >
                         Retry
                       </Button>
