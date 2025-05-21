@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,33 +7,23 @@ import { useToast } from "@/hooks/use-toast";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-
-interface UserPermissions {
-  addProduct: boolean;
-  editProduct: boolean;
-  deleteProduct: boolean;
-  addPriceHistory: boolean;
-  deletePriceHistory: boolean;
-  editPriceHistory: boolean;
-}
 
 interface User {
   id: string;
   email: string;
   display_name?: string;
   role?: string;
-  permissions: UserPermissions;
+  permissions: {
+    addProduct: boolean;
+    editProduct: boolean;
+    deleteProduct: boolean;
+    addPriceHistory: boolean;
+    deletePriceHistory: boolean;
+    editPriceHistory: boolean;
+  };
 }
-
-const defaultPermissions: UserPermissions = {
-  addProduct: false,
-  editProduct: false,
-  deleteProduct: false,
-  addPriceHistory: false,
-  deletePriceHistory: false,
-  editPriceHistory: false,
-};
 
 const UserPermissions = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -54,15 +45,17 @@ const UserPermissions = () => {
 
       if (error) throw error;
 
-      const formattedUsers = (data || []).map(user => ({
+      setUsers((data || []).map(user => ({
         ...user,
-        permissions: {
-          ...defaultPermissions,
-          ...(user.permissions || {})
+        permissions: user.permissions || {
+          addProduct: false,
+          editProduct: false,
+          deleteProduct: false,
+          addPriceHistory: false,
+          deletePriceHistory: false,
+          editPriceHistory: false,
         },
-      }));
-
-      setUsers(formattedUsers);
+      })));
     } catch (error: any) {
       console.error('Error fetching users:', error);
       toast({
@@ -75,32 +68,8 @@ const UserPermissions = () => {
     }
   };
 
-  const handlePermissionChange = async (userId: string, permissionType: keyof UserPermissions, newValue: boolean) => {
+  const updatePermission = async (userId: string, permissionType: string, value: boolean) => {
     try {
-      // Find the user to update
-      const userToUpdate = users.find(u => u.id === userId);
-      if (!userToUpdate) return;
-
-      // Block permission changes for admins
-      if (userToUpdate.role === 'admin') {
-        toast({
-          title: 'Cannot modify admin permissions',
-          description: 'Admin users have all permissions by default',
-          variant: 'default',
-        });
-        return;
-      }
-
-      // Only allow admins to modify permissions
-      if (currentUser?.role !== 'admin') {
-        toast({
-          title: 'Permission Denied',
-          description: 'Only administrators can modify permissions',
-          variant: 'destructive',
-        });
-        return;
-      }
-
       // Optimistic UI update
       setUsers(prevUsers =>
         prevUsers.map(user =>
@@ -109,20 +78,22 @@ const UserPermissions = () => {
                 ...user,
                 permissions: {
                   ...user.permissions,
-                  [permissionType]: newValue,
+                  [permissionType]: value,
                 },
               }
             : user
         )
       );
 
-      // Prepare updated permissions
+      // Database update
+      const userToUpdate = users.find(u => u.id === userId);
+      if (!userToUpdate) return;
+
       const updatedPermissions = {
         ...userToUpdate.permissions,
-        [permissionType]: newValue
+        [permissionType]: value
       };
 
-      // Update in database
       const { error } = await supabase
         .from('profiles')
         .update({ permissions: updatedPermissions })
@@ -132,7 +103,7 @@ const UserPermissions = () => {
 
       toast({
         title: 'Success',
-        description: `Updated ${permissionType} permission for ${userToUpdate.display_name || userToUpdate.email}`,
+        description: `Permission updated for ${userToUpdate.display_name || userToUpdate.email}`,
       });
     } catch (error: any) {
       console.error('Update failed:', error);
@@ -165,7 +136,7 @@ const UserPermissions = () => {
       <div className="space-y-6">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">User Management</h2>
-          <p className="text-muted-foreground">Manage user permissions for product operations</p>
+          <p className="text-muted-foreground">Manage user permissions</p>
         </div>
 
         <Card>
@@ -184,91 +155,86 @@ const UserPermissions = () => {
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
-                    <TableHead>Product Permissions</TableHead>
-                    <TableHead>Price History Permissions</TableHead>
+                    <TableHead>Permissions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {users.map(user => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.display_name || 'Unknown'}</TableCell>
+                      <TableCell className="font-medium">
+                        {user.display_name || 'Unknown'}
+                      </TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
-                        {user.role === 'admin' ? (
-                          <span className="px-2 py-1 bg-primary text-primary-foreground rounded-md text-sm">
-                            Admin
-                          </span>
-                        ) : (
-                          <span className="px-2 py-1 bg-secondary text-secondary-foreground rounded-md text-sm">
-                            User
-                          </span>
-                        )}
+                        <span className={`px-2 py-1 rounded-md text-sm ${
+                          user.role === 'admin' 
+                            ? 'bg-primary text-primary-foreground' 
+                            : 'bg-secondary text-secondary-foreground'
+                        }`}>
+                          {user.role === 'admin' ? 'Admin' : 'User'}
+                        </span>
                       </TableCell>
                       <TableCell>
                         {user.role === 'admin' ? (
                           <div className="text-muted-foreground text-sm">
-                            Full permissions
+                            Admin has full permissions
                           </div>
                         ) : (
-                          <div className="space-y-2">
-                            <PermissionSwitch
-                              label="Add Products"
-                              checked={user.permissions.addProduct}
-                              onCheckedChange={(checked) => 
-                                handlePermissionChange(user.id, 'addProduct', checked)
-                              }
-                              disabled={currentUser.role !== 'admin'}
-                            />
-                            <PermissionSwitch
-                              label="Edit Products"
-                              checked={user.permissions.editProduct}
-                              onCheckedChange={(checked) => 
-                                handlePermissionChange(user.id, 'editProduct', checked)
-                              }
-                              disabled={currentUser.role !== 'admin'}
-                            />
-                            <PermissionSwitch
-                              label="Delete Products"
-                              checked={user.permissions.deleteProduct}
-                              onCheckedChange={(checked) => 
-                                handlePermissionChange(user.id, 'deleteProduct', checked)
-                              }
-                              disabled={currentUser.role !== 'admin'}
-                            />
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {user.role === 'admin' ? (
-                          <div className="text-muted-foreground text-sm">
-                            Full permissions
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            <PermissionSwitch
-                              label="Add Price History"
-                              checked={user.permissions.addPriceHistory}
-                              onCheckedChange={(checked) => 
-                                handlePermissionChange(user.id, 'addPriceHistory', checked)
-                              }
-                              disabled={currentUser.role !== 'admin'}
-                            />
-                            <PermissionSwitch
-                              label="Edit Price History"
-                              checked={user.permissions.editPriceHistory}
-                              onCheckedChange={(checked) => 
-                                handlePermissionChange(user.id, 'editPriceHistory', checked)
-                              }
-                              disabled={currentUser.role !== 'admin'}
-                            />
-                            <PermissionSwitch
-                              label="Delete Price History"
-                              checked={user.permissions.deletePriceHistory}
-                              onCheckedChange={(checked) => 
-                                handlePermissionChange(user.id, 'deletePriceHistory', checked)
-                              }
-                              disabled={currentUser.role !== 'admin'}
-                            />
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <h4 className="font-medium">Products</h4>
+                              <PermissionSwitch
+                                label="Add"
+                                checked={user.permissions.addProduct}
+                                onCheckedChange={(checked) => 
+                                  updatePermission(user.id, 'addProduct', checked)
+                                }
+                                disabled={currentUser.role !== 'admin'}
+                              />
+                              <PermissionSwitch
+                                label="Edit"
+                                checked={user.permissions.editProduct}
+                                onCheckedChange={(checked) => 
+                                  updatePermission(user.id, 'editProduct', checked)
+                                }
+                                disabled={currentUser.role !== 'admin'}
+                              />
+                              <PermissionSwitch
+                                label="Delete"
+                                checked={user.permissions.deleteProduct}
+                                onCheckedChange={(checked) => 
+                                  updatePermission(user.id, 'deleteProduct', checked)
+                                }
+                                disabled={currentUser.role !== 'admin'}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <h4 className="font-medium">Price History</h4>
+                              <PermissionSwitch
+                                label="Add"
+                                checked={user.permissions.addPriceHistory}
+                                onCheckedChange={(checked) => 
+                                  updatePermission(user.id, 'addPriceHistory', checked)
+                                }
+                                disabled={currentUser.role !== 'admin'}
+                              />
+                              <PermissionSwitch
+                                label="Edit"
+                                checked={user.permissions.editPriceHistory}
+                                onCheckedChange={(checked) => 
+                                  updatePermission(user.id, 'editPriceHistory', checked)
+                                }
+                                disabled={currentUser.role !== 'admin'}
+                              />
+                              <PermissionSwitch
+                                label="Delete"
+                                checked={user.permissions.deletePriceHistory}
+                                onCheckedChange={(checked) => 
+                                  updatePermission(user.id, 'deletePriceHistory', checked)
+                                }
+                                disabled={currentUser.role !== 'admin'}
+                              />
+                            </div>
                           </div>
                         )}
                       </TableCell>
@@ -284,24 +250,24 @@ const UserPermissions = () => {
   );
 };
 
+// Helper component for consistent switch styling
 const PermissionSwitch = ({
   label,
   checked,
   onCheckedChange,
-  disabled,
+  disabled
 }: {
   label: string;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
   disabled?: boolean;
 }) => (
-  <div className="flex items-center justify-between gap-2">
-    <span className="text-sm">{label}</span>
+  <div className="flex items-center justify-between">
+    <span>{label}</span>
     <Switch
       checked={checked}
       onCheckedChange={onCheckedChange}
       disabled={disabled}
-      className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-gray-300"
     />
   </div>
 );
