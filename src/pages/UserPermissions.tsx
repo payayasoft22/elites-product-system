@@ -12,6 +12,7 @@ interface User {
   id: string;
   email: string;
   name: string;
+  role?: string;
   status: 'open' | 'closed';
 }
 
@@ -30,15 +31,15 @@ const UserPermissions = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, name')
+        .select('id, email, name, role')
+        .neq('role', 'admin')   // Exclude admin users
         .order('name', { ascending: true });
 
       if (error) throw error;
 
-      // Set default status to 'open' for all users
       const usersWithStatus = data.map(user => ({
         ...user,
-        status: 'open' as const
+        status: 'open' as const, // default status, you may change or fetch from DB
       }));
 
       setUsers(usersWithStatus);
@@ -56,11 +57,13 @@ const UserPermissions = () => {
 
   const updateUserStatus = async (userId: string, status: 'open' | 'closed') => {
     try {
-      // In a real app, you would update this in your database
+      // Here you can add code to update user status in your database if desired.
+      // For now, we just update local state for UI purposes.
+
       setUsers(prevUsers => 
         prevUsers.map(u => u.id === userId ? { ...u, status } : u)
       );
-      
+
       toast({
         title: 'Status Updated',
         description: `User status set to ${status}`,
@@ -88,9 +91,7 @@ const UserPermissions = () => {
       <div className="space-y-6">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">User Management</h2>
-          <p className="text-muted-foreground">
-            Manage user access status
-          </p>
+          <p className="text-muted-foreground">Manage user access status</p>
         </div>
 
         <Card>
@@ -119,9 +120,7 @@ const UserPermissions = () => {
                       <TableCell>
                         <Select
                           value={user.status}
-                          onValueChange={(value: 'open' | 'closed') => 
-                            updateUserStatus(user.id, value)
-                          }
+                          onValueChange={(value: 'open' | 'closed') => updateUserStatus(user.id, value)}
                         >
                           <SelectTrigger className="w-[120px]">
                             <SelectValue placeholder="Select status" />
