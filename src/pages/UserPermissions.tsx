@@ -71,7 +71,7 @@ const UserPermissions = () => {
     }
   };
 
-  const updatePermission = async (userId: string, permissionType: string, value: boolean) => {
+  const handlePermissionChange = async (userId: string, permissionType: string, newValue: boolean) => {
     try {
       // Optimistic UI update
       setUsers(prevUsers =>
@@ -81,32 +81,37 @@ const UserPermissions = () => {
                 ...user,
                 permissions: {
                   ...user.permissions,
-                  [permissionType]: value,
+                  [permissionType]: newValue,
                 },
               }
             : user
         )
       );
 
-      // Database update
+      // Find the user to update
+      const userToUpdate = users.find(u => u.id === userId);
+      if (!userToUpdate) return;
+
+      // Prepare updated permissions
+      const updatedPermissions = {
+        ...userToUpdate.permissions,
+        [permissionType]: newValue
+      };
+
+      // Update in database
       const { error } = await supabase
         .from('profiles')
-        .update({ 
-          permissions: {
-            ...users.find(u => u.id === userId)?.permissions,
-            [permissionType]: value
-          }
-        })
+        .update({ permissions: updatedPermissions })
         .eq('id', userId);
 
       if (error) throw error;
 
       toast({
         title: 'Success',
-        description: 'Permission updated successfully',
+        description: `Permission updated for ${userToUpdate.display_name || userToUpdate.email}`,
       });
-    } catch (error: any) {
-      console.error('Update failed:', error);
+    } catch (error) {
+      console.error('Error updating permission:', error);
       // Revert on error
       fetchUsers();
       toast({
@@ -174,7 +179,7 @@ const UserPermissions = () => {
                               label="Add"
                               checked={user.permissions.addProduct}
                               onCheckedChange={(checked) => 
-                                updatePermission(user.id, 'addProduct', checked)
+                                handlePermissionChange(user.id, 'addProduct', checked)
                               }
                               disabled={currentUser.role !== 'admin'}
                             />
@@ -182,7 +187,7 @@ const UserPermissions = () => {
                               label="Edit"
                               checked={user.permissions.editProduct}
                               onCheckedChange={(checked) => 
-                                updatePermission(user.id, 'editProduct', checked)
+                                handlePermissionChange(user.id, 'editProduct', checked)
                               }
                               disabled={currentUser.role !== 'admin'}
                             />
@@ -190,7 +195,7 @@ const UserPermissions = () => {
                               label="Delete"
                               checked={user.permissions.deleteProduct}
                               onCheckedChange={(checked) => 
-                                updatePermission(user.id, 'deleteProduct', checked)
+                                handlePermissionChange(user.id, 'deleteProduct', checked)
                               }
                               disabled={currentUser.role !== 'admin'}
                             />
@@ -201,7 +206,7 @@ const UserPermissions = () => {
                               label="Add"
                               checked={user.permissions.addPriceHistory}
                               onCheckedChange={(checked) => 
-                                updatePermission(user.id, 'addPriceHistory', checked)
+                                handlePermissionChange(user.id, 'addPriceHistory', checked)
                               }
                               disabled={currentUser.role !== 'admin'}
                             />
@@ -209,7 +214,7 @@ const UserPermissions = () => {
                               label="Edit"
                               checked={user.permissions.editPriceHistory}
                               onCheckedChange={(checked) => 
-                                updatePermission(user.id, 'editPriceHistory', checked)
+                                handlePermissionChange(user.id, 'editPriceHistory', checked)
                               }
                               disabled={currentUser.role !== 'admin'}
                             />
@@ -217,7 +222,7 @@ const UserPermissions = () => {
                               label="Delete"
                               checked={user.permissions.deletePriceHistory}
                               onCheckedChange={(checked) => 
-                                updatePermission(user.id, 'deletePriceHistory', checked)
+                                handlePermissionChange(user.id, 'deletePriceHistory', checked)
                               }
                               disabled={currentUser.role !== 'admin'}
                             />
@@ -236,7 +241,7 @@ const UserPermissions = () => {
   );
 };
 
-// Reusable switch component
+// Reusable switch component with proper styling
 const PermissionSwitch = ({
   label,
   checked,
@@ -248,13 +253,13 @@ const PermissionSwitch = ({
   onCheckedChange: (checked: boolean) => void;
   disabled?: boolean;
 }) => (
-  <div className="flex items-center justify-between">
-    <span>{label}</span>
+  <div className="flex items-center justify-between gap-2">
+    <span className="text-sm">{label}</span>
     <Switch
       checked={checked}
       onCheckedChange={onCheckedChange}
       disabled={disabled}
-      className="data-[state=checked]:bg-primary data-[state=unchecked]:bg-input"
+      className="data-[state=checked]:bg-primary data-[state=unchecked]:bg-gray-300"
     />
   </div>
 );
