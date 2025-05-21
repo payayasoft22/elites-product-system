@@ -10,7 +10,7 @@ export interface AdminRequest {
   requested_at: string;
   resolved_at: string | null;
   resolved_by: string | null;
-  name?: string;
+  display_name?: string;
   email?: string;
 }
 
@@ -19,15 +19,10 @@ export function useAdminRequests() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Current user's admin request
-  const { 
-    data: currentUserRequest, 
-    error: currentUserRequestError 
-  } = useQuery({
+  const { data: currentUserRequest, error: currentUserRequestError } = useQuery({
     queryKey: ["admin_requests", "current_user"],
     queryFn: async () => {
       if (!user?.id) return null;
-      
       const { data, error } = await supabase
         .from("admin_requests")
         .select("*")
@@ -35,67 +30,46 @@ export function useAdminRequests() {
         .order("requested_at", { ascending: false })
         .limit(1);
       
-      if (error) {
-        console.error("Error fetching user's admin request:", error);
-        throw error;
-      }
-      
+      if (error) throw error;
       return data?.[0] || null;
     },
     enabled: !!user,
   });
 
-  // All admin requests (only for admins)
-  const { 
-    data: allRequests, 
-    isLoading: requestsLoading, 
-    error: allRequestsError 
-  } = useQuery({
+  const { data: allRequests, isLoading: requestsLoading, error: allRequestsError } = useQuery({
     queryKey: ["admin_requests", "all"],
     queryFn: async () => {
-      // First fetch all admin requests
       const { data: requestsData, error: requestsError } = await supabase
         .from("admin_requests")
         .select("*")
         .order("requested_at", { ascending: false });
       
-      if (requestsError) {
-        console.error("Error fetching admin requests:", requestsError);
-        throw requestsError;
-      }
+      if (requestsError) throw requestsError;
 
-      // Then fetch associated profiles
       const userIds = requestsData.map(req => req.user_id);
       const { data: profilesData, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, name, first_name, email")
+        .select("id, display_name, email")
         .in("id", userIds);
       
-      if (profilesError) {
-        console.error("Error fetching profiles:", profilesError);
-        throw profilesError;
-      }
+      if (profilesError) throw profilesError;
 
-      // Combine the data
       return requestsData.map(req => {
         const profile = profilesData.find(p => p.id === req.user_id);
         return {
           ...req,
-          name: profile?.name || profile?.first_name || "Unknown",
+          display_name: profile?.display_name || "Unknown",
           email: profile?.email || "Unknown"
         };
       });
     },
     enabled: !!user,
-    retry: 2, // Retry failed requests twice
   });
 
-  // Request admin role mutation
   const requestAdminRole = useMutation({
     mutationFn: async () => {
       if (!user?.id) throw new Error("No user ID available");
       
-      // Check for existing pending request
       const { data: existing, error: checkError } = await supabase
         .from("admin_requests")
         .select("*")
@@ -118,7 +92,7 @@ export function useAdminRequests() {
     onSuccess: () => {
       toast({
         title: "Request submitted",
-        description: "Your admin request has been submitted for review.",
+        description: "Your admin request has been submitted.",
       });
       queryClient.invalidateQueries(["admin_requests"]);
     },
@@ -131,12 +105,10 @@ export function useAdminRequests() {
     },
   });
 
-  // Approve request mutation
   const approveRequest = useMutation({
     mutationFn: async ({ requestId, userId }: { requestId: string; userId: string }) => {
       if (!user?.id) throw new Error("No admin user ID available");
       
-      // Update request status
       const { error: requestError } = await supabase
         .from("admin_requests")
         .update({
@@ -148,7 +120,6 @@ export function useAdminRequests() {
       
       if (requestError) throw requestError;
       
-      // Update user role
       const { error: roleError } = await supabase
         .from("profiles")
         .update({ role: "admin" })
@@ -173,7 +144,6 @@ export function useAdminRequests() {
     },
   });
 
-  // Reject request mutation
   const rejectRequest = useMutation({
     mutationFn: async (requestId: string) => {
       if (!user?.id) throw new Error("No admin user ID available");
