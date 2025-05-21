@@ -6,7 +6,9 @@ import { useToast } from "@/hooks/use-toast";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 
 interface User {
   id: string;
@@ -114,7 +116,7 @@ const UserPermissions = () => {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>Permissions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -123,18 +125,39 @@ const UserPermissions = () => {
                       <TableCell className="font-medium">{user.display_name || 'Unknown'}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
-                        <Select
-                          value={user.status}
-                          onValueChange={(value: 'open' | 'closed') => updateUserStatus(user.id, value)}
-                        >
-                          <SelectTrigger className="w-[120px]">
-                            <SelectValue placeholder="Select status" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="open">Open</SelectItem>
-                            <SelectItem value="closed">Closed</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <div className="flex gap-2">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline">Add Product</Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              <DropdownMenuItem className="flex items-center justify-between gap-4">
+                                Edit
+                                <Switch />
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="flex items-center justify-between gap-4">
+                                Delete
+                                <Switch />
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline">Price History</Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              <DropdownMenuItem className="flex items-center justify-between gap-4">
+                                Edit
+                                <Switch />
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="flex items-center justify-between gap-4">
+                                Delete
+                                <Switch />
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
