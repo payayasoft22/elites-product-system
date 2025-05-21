@@ -8,8 +8,6 @@ import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import * as z from "zod";
-import { useAuth } from "@/contexts/AuthContext";
-import { usePermission } from "@/hooks/usePermission";
 
 // Import the extracted components
 import ProductList from "@/components/products/ProductList";
@@ -22,8 +20,6 @@ import { Product, PriceHistory } from "@/components/products/types";
 const Products = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { isAdmin } = usePermission();
 
   // State variables
   const [products, setProducts] = useState<Product[]>([]);
@@ -44,20 +40,8 @@ const Products = () => {
   const [tempProduct, setTempProduct] = useState<Product | null>(null);
   const itemsPerPage = 10;
 
-  const showPermissionDenied = () => {
-    toast({
-      title: "Permission Denied",
-      description: "You need admin privileges to access this feature. Please request admin access.",
-      variant: "destructive",
-    });
-  };
-
   // Event handlers
   const handleAddProduct = () => {
-    if (!isAdmin) {
-      showPermissionDenied();
-      return;
-    }
     const tempProd: Product = {
       prodcode: "",
       description: "",
@@ -69,62 +53,40 @@ const Products = () => {
   };
 
   const handleEditProduct = (product: Product) => {
-    if (!isAdmin) {
-      showPermissionDenied();
-      return;
-    }
     setSelectedProduct(product);
     setIsEditProductOpen(true);
   };
 
   const handleDeleteProduct = (product: Product) => {
-    if (!isAdmin) {
-      showPermissionDenied();
-      return;
-    }
     setSelectedProduct(product);
     setIsDeleteConfirmOpen(true);
   };
 
   const handleManagePriceHistory = () => {
-    if (!isAdmin) {
-      showPermissionDenied();
-      return;
-    }
     if (!tempProduct) return;
 
     if (tempProduct.prodcode) {
       fetchPriceHistory(tempProduct.prodcode);
     }
+
     setIsPriceHistorySheetOpen(true);
   };
 
   const handleAddPrice = () => {
-    if (!isAdmin) {
-      showPermissionDenied();
-      return;
-    }
     setIsAddPriceOpen(true);
   };
 
   const handleEditPrice = (price: PriceHistory) => {
-    if (!isAdmin) {
-      showPermissionDenied();
-      return;
-    }
     setSelectedPrice(price);
     setIsEditPriceOpen(true);
   };
 
   const handleDeletePrice = (price: PriceHistory) => {
-    if (!isAdmin) {
-      showPermissionDenied();
-      return;
-    }
     setSelectedPrice(price);
     setIsDeletePriceOpen(true);
   };
 
+  // *** FIXED: Navigate to Price History page ***
   const handleViewPriceHistory = (prodcode: string) => {
     navigate(`/price-history/${prodcode}`);
   };
@@ -132,11 +94,6 @@ const Products = () => {
   // CRUD operations
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      if (!isAdmin) {
-        showPermissionDenied();
-        return;
-      }
-
       const { error: productError } = await supabase
         .from("product")
         .insert({
@@ -179,10 +136,6 @@ const Products = () => {
   };
 
   const onEdit = async (values: z.infer<typeof formSchema>) => {
-    if (!isAdmin) {
-      showPermissionDenied();
-      return;
-    }
     if (!selectedProduct) return;
 
     try {
@@ -228,10 +181,6 @@ const Products = () => {
   };
 
   const onDelete = async () => {
-    if (!isAdmin) {
-      showPermissionDenied();
-      return;
-    }
     if (!selectedProduct) return;
 
     try {
@@ -275,7 +224,7 @@ const Products = () => {
       const { data: productsData, error: productsError } = await supabase
         .from("product")
         .select("*")
-        .order("prodcode", { ascending: true });
+        .order("prodcode", { ascending: true }); // Ensure alphabetical order by product code
 
       if (productsError) throw productsError;
 
@@ -341,10 +290,6 @@ const Products = () => {
   };
 
   const onSubmitPrice = async (values: z.infer<typeof priceHistorySchema>) => {
-    if (!isAdmin) {
-      showPermissionDenied();
-      return;
-    }
     if (!tempProduct) return;
 
     try {
@@ -382,10 +327,6 @@ const Products = () => {
   };
 
   const onEditPrice = async (values: z.infer<typeof priceHistorySchema>) => {
-    if (!isAdmin) {
-      showPermissionDenied();
-      return;
-    }
     if (!selectedPrice || !tempProduct) return;
 
     try {
@@ -427,10 +368,6 @@ const Products = () => {
   };
 
   const onDeletePrice = async () => {
-    if (!isAdmin) {
-      showPermissionDenied();
-      return;
-    }
     if (!selectedPrice || !tempProduct) return;
 
     try {
@@ -487,11 +424,7 @@ const Products = () => {
             <h2 className="text-3xl font-bold tracking-tight">Products</h2>
             <p className="text-muted-foreground">Manage your product catalog and pricing history.</p>
           </div>
-          <Button 
-            onClick={handleAddProduct} 
-            className="gap-1"
-            disabled={!isAdmin}
-          >
+          <Button onClick={handleAddProduct} className="gap-1">
             <Plus className="h-4 w-4" /> Add Product
           </Button>
         </div>
@@ -509,8 +442,7 @@ const Products = () => {
             handleAddProduct={handleAddProduct}
             handleEditProduct={handleEditProduct}
             handleDeleteProduct={handleDeleteProduct}
-            handleViewPriceHistory={handleViewPriceHistory}
-            isAdmin={isAdmin}
+            handleViewPriceHistory={handleViewPriceHistory} // FIXED here
           />
         </Card>
       </div>
@@ -537,7 +469,6 @@ const Products = () => {
             onManagePriceHistory={handleManagePriceHistory}
             tempProduct={tempProduct}
             setTempProduct={setTempProduct}
-            isAdmin={isAdmin}
           />
         </DialogContent>
       </Dialog>
@@ -548,13 +479,7 @@ const Products = () => {
           <DialogHeader>
             <DialogTitle>Edit Product</DialogTitle>
           </DialogHeader>
-          <ProductForm 
-            onSubmit={onEdit} 
-            isEdit={true} 
-            product={selectedProduct} 
-            onCancel={() => setIsEditProductOpen(false)} 
-            isAdmin={isAdmin}
-          />
+          <ProductForm onSubmit={onEdit} isEdit={true} product={selectedProduct} onCancel={() => setIsEditProductOpen(false)} />
         </DialogContent>
       </Dialog>
 
@@ -564,13 +489,7 @@ const Products = () => {
           <DialogHeader>
             <DialogTitle>Delete Product</DialogTitle>
           </DialogHeader>
-          <DeleteConfirmDialog 
-            itemType="Product" 
-            itemName={selectedProduct?.prodcode || ""} 
-            onDelete={onDelete} 
-            onCancel={() => setIsDeleteConfirmOpen(false)}
-            isAdmin={isAdmin}
-          />
+          <DeleteConfirmDialog itemType="Product" itemName={selectedProduct?.prodcode || ""} onDelete={onDelete} onCancel={() => setIsDeleteConfirmOpen(false)} />
         </DialogContent>
       </Dialog>
 
@@ -583,7 +502,6 @@ const Products = () => {
         onAddPrice={handleAddPrice}
         onEditPrice={handleEditPrice}
         onDeletePrice={handleDeletePrice}
-        isAdmin={isAdmin}
       />
 
       {/* Add Price Dialog */}
@@ -593,11 +511,7 @@ const Products = () => {
             <DialogTitle>Add Price History</DialogTitle>
             <DialogDescription>Add a new price entry for {tempProduct?.prodcode}.</DialogDescription>
           </DialogHeader>
-          <PriceForm 
-            onSubmit={onSubmitPrice} 
-            onCancel={() => setIsAddPriceOpen(false)} 
-            isAdmin={isAdmin}
-          />
+          <PriceForm onSubmit={onSubmitPrice} onCancel={() => setIsAddPriceOpen(false)} />
         </DialogContent>
       </Dialog>
 
@@ -608,14 +522,7 @@ const Products = () => {
             <DialogTitle>Edit Price History</DialogTitle>
             <DialogDescription>Edit price entry for {tempProduct?.prodcode}.</DialogDescription>
           </DialogHeader>
-          <PriceForm 
-            onSubmit={onEditPrice} 
-            isEdit={true} 
-            initialPrice={selectedPrice?.unitprice || 0} 
-            initialDate={selectedPrice?.effdate || ""} 
-            onCancel={() => setIsEditPriceOpen(false)}
-            isAdmin={isAdmin}
-          />
+          <PriceForm onSubmit={onEditPrice} isEdit={true} initialPrice={selectedPrice?.unitprice || 0} initialDate={selectedPrice?.effdate || ""} onCancel={() => setIsEditPriceOpen(false)} />
         </DialogContent>
       </Dialog>
 
@@ -630,7 +537,6 @@ const Products = () => {
             itemName={`for ${tempProduct?.prodcode || ""} on ${selectedPrice ? new Date(selectedPrice.effdate).toLocaleDateString() : ""}`}
             onDelete={onDeletePrice}
             onCancel={() => setIsDeletePriceOpen(false)}
-            isAdmin={isAdmin}
           />
         </DialogContent>
       </Dialog>
