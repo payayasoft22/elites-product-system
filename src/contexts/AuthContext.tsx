@@ -24,15 +24,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
-  
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
-        
+
         if (event === 'SIGNED_IN') {
-          // Check if this is the first user after sign in
           await checkFirstUserSetup(currentSession?.user);
           toast({
             title: "Signed in successfully",
@@ -44,10 +43,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             title: "Signed out",
             description: "You have been signed out successfully.",
           });
+          setUser(null);
+          setSession(null);
+          navigate("/login");
         }
       }
     );
-    
+
     supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
@@ -56,46 +58,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       setLoading(false);
     });
-    
+
     return () => subscription.unsubscribe();
   }, [toast, navigate]);
 
-  const checkFirstUserSetup = async (user: User) => {
+  const checkFirstUserSetup = async (user: User | undefined | null) => {
+    if (!user) return;
     try {
-      // 1. Check if user already has admin role
-      const { data: profile } = await supabase
+      // Check if user already has admin role
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', user.id)
         .single();
 
+      if (profileError) throw profileError;
       if (profile?.role === 'admin') return;
 
-      // 2. Check if this is the first user
-      const { count } = await supabase
+      // Check if this is the first user
+      const { count, error: countError } = await supabase
         .from('profiles')
         .select('*', { count: 'exact', head: true });
 
+      if (countError) throw countError;
+
       const isFirstUser = count === 0;
 
-      // 3. Update profile if needed
       if (isFirstUser) {
-        await supabase
+        // Update profile role & flag
+        const { error: updateError } = await supabase
           .from('profiles')
           .update({
             role: 'admin',
             is_first_user: true,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
           })
           .eq('id', user.id);
 
-        // 4. Set up admin permissions
+        if (updateError) throw updateError;
+
+        // Set admin permissions
         const actions = [
           'add_product', 'delete_product', 'edit_product',
           'add_price_history', 'delete_price_history', 'edit_price_history'
         ];
 
-        await supabase
+        const { error: permissionError } = await supabase
           .from('role_permissions')
           .upsert(
             actions.map(action => ({
@@ -106,6 +114,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             { onConflict: 'role,action' }
           );
 
+        if (permissionError) throw permissionError;
+
         toast({
           title: 'Admin privileges granted',
           description: 'As the first user, you have full admin access.',
@@ -115,7 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('First user setup check failed:', error);
     }
   };
-  
+
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
@@ -132,25 +142,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     }
   };
-  
+
   const signup = async (email: string, password: string, name?: string) => {
     setLoading(true);
     try {
-      // Validate input
       if (!email) throw new Error("Email is required");
 
       const [firstName, ...lastNameParts] = (name || '').split(' ');
       const lastName = lastNameParts.join(' ') || null;
       const displayName = name || email.split('@')[0];
 
-      // 1. Check if this will be the first user
-      const { count } = await supabase
+      // Check if this is the first user
+      const { count, error: countError } = await supabase
         .from('profiles')
         .select('*', { count: 'exact', head: true });
 
+      if (countError) throw countError;
+
       const isFirstUser = count === 0;
 
-      // 2. Create auth user
+      // Create the auth user
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -158,15 +169,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           data: {
             first_name: firstName,
             last_name: lastName,
-            full_name: name || displayName
+            full_name: name || displayName,
           },
-          emailRedirectTo: `${window.location.origin}/dashboard`
-        }
+          emailRedirectTo: `${window.location.origin}/dashboard`,
+        },
       });
 
       if (error) throw error;
 
-      // 3. Create profile with appropriate role
+      // Create or update profile in your DB
       if (data.user) {
         const { error: profileError } = await supabase
           .from('profiles')
@@ -177,55 +188,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             last_name: lastName,
             display_name: displayName,
             role: isFirstUser ? 'admin' : 'user',
-            is_first_user: isFirstUser
+            is_first_user: isFirstUser,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           }, {
-            onConflict: 'id'
+            onConflict: 'id',
           });
 
         if (profileError) throw profileError;
 
-        // 4. If first user, set up permissions
+        // If first user, set admin permissions immediately
         if (isFirstUser) {
           const actions = [
             'add_product', 'delete_product', 'edit_product',
             'add_price_history', 'delete_price_history', 'edit_price_history'
           ];
 
-          await supabase
+          const { error: permissionError } = await supabase
             .from('role_permissions')
             .upsert(
               actions.map(action => ({
                 role: 'admin',
                 action,
-                allowed: true
+                allowed: true,
               })),
               { onConflict: 'role,action' }
             );
+
+          if (permissionError) throw permissionError;
         }
       }
 
       toast({
         title: "Account created",
-        description: isFirstUser 
-          ? "First admin account created successfully!" 
+        description: isFirstUser
+          ? "First admin account created successfully!"
           : "Please check your email to confirm your account",
       });
-
     } catch (error: any) {
       console.error("Signup error:", error);
       toast({
         title: "Signup failed",
-        description: error.message.includes("row-level security") 
-          ? "Permission denied during signup" 
+        description: error.message.includes("row-level security")
+          ? "Permission denied during signup"
           : error.message || "Failed to create account",
-        variant: "destructive"
+        variant: "destructive",
       });
       throw error;
     } finally {
       setLoading(false);
     }
   };
-  
+
   const resetPassword = async (email: string) => {
     setLoading(true);
     try {
@@ -248,7 +262,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     }
   };
-  
+
   const logout = async () => {
     try {
       await supabase.auth.signOut();
@@ -261,7 +275,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     }
   };
-  
+
   return (
     <AuthContext.Provider
       value={{
