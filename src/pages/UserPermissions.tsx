@@ -6,17 +6,22 @@ import { useToast } from "@/hooks/use-toast";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Switch } from "@/components/ui/switch";
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 
 interface User {
   id: string;
   email: string;
   display_name?: string;
   role?: string;
-  status: 'open' | 'closed';
+  permissions: {
+    addProduct: boolean;
+    editProduct: boolean;
+    deleteProduct: boolean;
+    addPriceHistory: boolean;
+    deletePriceHistory: boolean;
+    editPriceHistory: boolean;
+  };
 }
 
 const UserPermissions = () => {
@@ -34,20 +39,25 @@ const UserPermissions = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, display_name, role')
-        .neq('role', 'admin') // Excluding admin role from this list
+        .select('id, email, display_name, role, permissions')
+        .neq('role', 'admin')
         .order('display_name', { ascending: true });
 
       if (error) throw error;
 
-      console.log("Fetched users:", data);
-
-      const usersWithStatus = (data || []).map(user => ({
+      const usersWithDefaults = (data || []).map(user => ({
         ...user,
-        status: 'open' as const, // Default status
+        permissions: user.permissions || {
+          addProduct: false,
+          editProduct: false,
+          deleteProduct: false,
+          addPriceHistory: false,
+          deletePriceHistory: false,
+          editPriceHistory: false,
+        },
       }));
 
-      setUsers(usersWithStatus);
+      setUsers(usersWithDefaults);
     } catch (error: any) {
       console.error('Error fetching users:', error);
       toast({
@@ -60,21 +70,43 @@ const UserPermissions = () => {
     }
   };
 
-  const updateUserStatus = async (userId: string, status: 'open' | 'closed') => {
+  const updatePermission = async (userId: string, permissionType: string, value: boolean) => {
     try {
+      // Update permissions locally
       setUsers(prevUsers =>
-        prevUsers.map(u => (u.id === userId ? { ...u, status } : u))
+        prevUsers.map(u =>
+          u.id === userId
+            ? {
+                ...u,
+                permissions: {
+                  ...u.permissions,
+                  [permissionType]: value,
+                },
+              }
+            : u
+        )
       );
 
+      // Update permissions in the database
+      const userToUpdate = users.find(u => u.id === userId);
+      if (userToUpdate) {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ permissions: userToUpdate.permissions })
+          .eq('id', userId);
+
+        if (error) throw error;
+      }
+
       toast({
-        title: 'Status Updated',
-        description: `User status set to ${status}`,
+        title: 'Permission Updated',
+        description: `Updated ${permissionType} permission.`,
       });
     } catch (error: any) {
-      console.error('Error updating status:', error);
+      console.error('Error updating permission:', error);
       toast({
         title: 'Error',
-        description: 'Failed to update status',
+        description: 'Failed to update permission',
         variant: 'destructive',
       });
     }
@@ -99,7 +131,7 @@ const UserPermissions = () => {
       <div className="space-y-6">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">User Management</h2>
-          <p className="text-muted-foreground">Manage user access status and permissions</p>
+          <p className="text-muted-foreground">Manage user permissions</p>
         </div>
 
         <Card>
@@ -117,69 +149,58 @@ const UserPermissions = () => {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead>Permissions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {users.map(user => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger className="hover:underline cursor-pointer">
-                            {user.display_name || 'Unknown'}
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent>
-                            <DropdownMenuItem className="flex items-center justify-between gap-4">
-                              Add Product
-                              <Switch />
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="flex items-center justify-between gap-4">
-                              Edit
-                              <Switch />
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="flex items-center justify-between gap-4">
-                              Delete
-                              <Switch />
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="flex items-center justify-between gap-4">
-                              Price History
-                              <Switch />
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
+                      <TableCell className="font-medium">{user.display_name || 'Unknown'}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
-                        <Select
-                          value={user.status}
-                          onValueChange={(value: 'open' | 'closed') => updateUserStatus(user.id, value)}
-                        >
-                          <SelectTrigger className="w-[120px]">
-                            <SelectValue placeholder="Select status" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="open">Open</SelectItem>
-                            <SelectItem value="closed">Closed</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex space-x-4">
-                          <Button
-                            variant="outline"
-                            onClick={() => toast({ title: 'Edit', description: `Editing ${user.display_name}` })}
-                            disabled={user.role === 'admin'}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            onClick={() => toast({ title: 'Delete', description: `Deleting ${user.display_name}` })}
-                            disabled={user.role === 'admin'}
-                          >
-                            Delete
-                          </Button>
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center gap-2">
+                            <span>Add Product</span>
+                            <Switch
+                              checked={user.permissions.addProduct}
+                              onCheckedChange={checked => updatePermission(user.id, 'addProduct', checked)}
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span>Edit Product</span>
+                            <Switch
+                              checked={user.permissions.editProduct}
+                              onCheckedChange={checked => updatePermission(user.id, 'editProduct', checked)}
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span>Delete Product</span>
+                            <Switch
+                              checked={user.permissions.deleteProduct}
+                              onCheckedChange={checked => updatePermission(user.id, 'deleteProduct', checked)}
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span>Add Price History</span>
+                            <Switch
+                              checked={user.permissions.addPriceHistory}
+                              onCheckedChange={checked => updatePermission(user.id, 'addPriceHistory', checked)}
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span>Delete Price History</span>
+                            <Switch
+                              checked={user.permissions.deletePriceHistory}
+                              onCheckedChange={checked => updatePermission(user.id, 'deletePriceHistory', checked)}
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span>Edit Price History</span>
+                            <Switch
+                              checked={user.permissions.editPriceHistory}
+                              onCheckedChange={checked => updatePermission(user.id, 'editPriceHistory', checked)}
+                            />
+                          </div>
                         </div>
                       </TableCell>
                     </TableRow>
