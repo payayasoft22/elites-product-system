@@ -6,12 +6,15 @@ import { Plus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import * as z from "zod";
+
+// Import the extracted components
 import ProductList from "@/components/products/ProductList";
 import ProductForm, { formSchema } from "@/components/products/ProductForm";
 import PriceHistorySheet from "@/components/products/PriceHistorySheet";
 import PriceForm, { priceHistorySchema } from "@/components/products/PriceForm";
 import DeleteConfirmDialog from "@/components/products/DeleteConfirmDialog";
-import * as z from "zod";
 import { Product, PriceHistory } from "@/components/products/types";
 
 const Products = () => {
@@ -83,7 +86,7 @@ const Products = () => {
     setIsDeletePriceOpen(true);
   };
 
-  // FIXED navigation handler for Price History
+  // *** FIXED: Navigate to Price History page ***
   const handleViewPriceHistory = (prodcode: string) => {
     navigate(`/price-history/${prodcode}`);
   };
@@ -91,19 +94,23 @@ const Products = () => {
   // CRUD operations
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      const { error: productError } = await supabase.from("product").insert({
-        prodcode: values.prodcode,
-        description: values.description,
-        unit: values.unit,
-      });
+      const { error: productError } = await supabase
+        .from("product")
+        .insert({
+          prodcode: values.prodcode,
+          description: values.description,
+          unit: values.unit,
+        });
 
       if (productError) throw productError;
 
-      const { error: priceError } = await supabase.from("pricehist").insert({
-        prodcode: values.prodcode,
-        unitprice: values.unitprice,
-        effdate: new Date().toISOString().split("T")[0],
-      });
+      const { error: priceError } = await supabase
+        .from("pricehist")
+        .insert({
+          prodcode: values.prodcode,
+          unitprice: values.unitprice,
+          effdate: new Date().toISOString().split("T")[0],
+        });
 
       if (priceError) throw priceError;
 
@@ -143,11 +150,13 @@ const Products = () => {
       if (productError) throw productError;
 
       if (values.unitprice !== selectedProduct.currentPrice) {
-        const { error: priceError } = await supabase.from("pricehist").insert({
-          prodcode: selectedProduct.prodcode,
-          unitprice: values.unitprice,
-          effdate: new Date().toISOString().split("T")[0],
-        });
+        const { error: priceError } = await supabase
+          .from("pricehist")
+          .insert({
+            prodcode: selectedProduct.prodcode,
+            unitprice: values.unitprice,
+            effdate: new Date().toISOString().split("T")[0],
+          });
 
         if (priceError) throw priceError;
       }
@@ -215,7 +224,7 @@ const Products = () => {
       const { data: productsData, error: productsError } = await supabase
         .from("product")
         .select("*")
-        .order("prodcode", { ascending: true });
+        .order("prodcode", { ascending: true }); // Ensure alphabetical order by product code
 
       if (productsError) throw productsError;
 
@@ -284,11 +293,13 @@ const Products = () => {
     if (!tempProduct) return;
 
     try {
-      const { error } = await supabase.from("pricehist").insert({
-        prodcode: tempProduct.prodcode,
-        unitprice: values.unitprice,
-        effdate: values.effdate,
-      });
+      const { error } = await supabase
+        .from("pricehist")
+        .insert({
+          prodcode: tempProduct.prodcode,
+          unitprice: values.unitprice,
+          effdate: values.effdate,
+        });
 
       if (error) throw error;
 
@@ -431,13 +442,104 @@ const Products = () => {
             handleAddProduct={handleAddProduct}
             handleEditProduct={handleEditProduct}
             handleDeleteProduct={handleDeleteProduct}
-            handleViewPriceHistory={handleViewPriceHistory} // <- Fix: pass handler here
+            handleViewPriceHistory={handleViewPriceHistory} // FIXED here
           />
         </Card>
       </div>
 
       {/* Add Product Dialog */}
-      {/* ... same as your existing dialogs ... */}
+      <Dialog
+        open={isAddProductOpen}
+        onOpenChange={(open) => {
+          setIsAddProductOpen(open);
+          if (!open) {
+            setTempProduct(null);
+            setIsPriceHistorySheetOpen(false);
+            setPriceHistory([]);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add New Product</DialogTitle>
+          </DialogHeader>
+          <ProductForm
+            onSubmit={onSubmit}
+            onCancel={() => setIsAddProductOpen(false)}
+            onManagePriceHistory={handleManagePriceHistory}
+            tempProduct={tempProduct}
+            setTempProduct={setTempProduct}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Product Dialog */}
+      <Dialog open={isEditProductOpen} onOpenChange={setIsEditProductOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit Product</DialogTitle>
+          </DialogHeader>
+          <ProductForm onSubmit={onEdit} isEdit={true} product={selectedProduct} onCancel={() => setIsEditProductOpen(false)} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Product Confirm Dialog */}
+      <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Product</DialogTitle>
+          </DialogHeader>
+          <DeleteConfirmDialog itemType="Product" itemName={selectedProduct?.prodcode || ""} onDelete={onDelete} onCancel={() => setIsDeleteConfirmOpen(false)} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Price History Sheet */}
+      <PriceHistorySheet
+        isOpen={isPriceHistorySheetOpen}
+        onOpenChange={setIsPriceHistorySheetOpen}
+        tempProduct={tempProduct}
+        priceHistory={priceHistory}
+        onAddPrice={handleAddPrice}
+        onEditPrice={handleEditPrice}
+        onDeletePrice={handleDeletePrice}
+      />
+
+      {/* Add Price Dialog */}
+      <Dialog open={isAddPriceOpen} onOpenChange={setIsAddPriceOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add Price History</DialogTitle>
+            <DialogDescription>Add a new price entry for {tempProduct?.prodcode}.</DialogDescription>
+          </DialogHeader>
+          <PriceForm onSubmit={onSubmitPrice} onCancel={() => setIsAddPriceOpen(false)} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Price Dialog */}
+      <Dialog open={isEditPriceOpen} onOpenChange={setIsEditPriceOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit Price History</DialogTitle>
+            <DialogDescription>Edit price entry for {tempProduct?.prodcode}.</DialogDescription>
+          </DialogHeader>
+          <PriceForm onSubmit={onEditPrice} isEdit={true} initialPrice={selectedPrice?.unitprice || 0} initialDate={selectedPrice?.effdate || ""} onCancel={() => setIsEditPriceOpen(false)} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Price Confirm Dialog */}
+      <Dialog open={isDeletePriceOpen} onOpenChange={setIsDeletePriceOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Price History</DialogTitle>
+          </DialogHeader>
+          <DeleteConfirmDialog
+            itemType="Price"
+            itemName={`for ${tempProduct?.prodcode || ""} on ${selectedPrice ? new Date(selectedPrice.effdate).toLocaleDateString() : ""}`}
+            onDelete={onDeletePrice}
+            onCancel={() => setIsDeletePriceOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
