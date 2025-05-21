@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -28,9 +27,10 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 const Login = () => {
-  const { login, loading } = useAuth();
+  const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // Local loading state
   
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -42,9 +42,17 @@ const Login = () => {
   
   const onSubmit = async (data: LoginFormValues) => {
     try {
+      setIsLoading(true);
       await login(data.email, data.password);
     } catch (error) {
       console.error("Login error:", error);
+      // Optionally set form error here
+      form.setError("root", {
+        type: "manual",
+        message: "Invalid email or password",
+      });
+    } finally {
+      setIsLoading(false); // Ensure loading state is reset
     }
   };
 
@@ -65,6 +73,12 @@ const Login = () => {
           <CardContent>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                {form.formState.errors.root && (
+                  <p className="text-sm font-medium text-destructive">
+                    {form.formState.errors.root.message}
+                  </p>
+                )}
+                
                 <FormField
                   control={form.control}
                   name="email"
@@ -131,9 +145,9 @@ const Login = () => {
                 <Button 
                   type="submit" 
                   className="w-full bg-brand-600 hover:bg-brand-700" 
-                  disabled={loading}
+                  disabled={isLoading}
                 >
-                  {loading ? (
+                  {isLoading ? (
                     <div className="flex items-center gap-2">
                       <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin"></div>
                       <span>Logging in...</span>
