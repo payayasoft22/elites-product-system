@@ -354,3 +354,186 @@ const Users = () => {
                   >
                     Request Admin Role
                     {requestAdminRole.isPending && (
+                      <div className="ml-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    )}
+                  </Button>
+                </CardFooter>
+              )}
+              {!isAdmin && hasPendingRequest && (
+                <CardFooter className="flex justify-center pt-2 pb-4">
+                  <Badge variant="outline" className="py-2 px-3">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 text-yellow-500" />
+                      Admin request pending approval
+                    </div>
+                  </Badge>
+                </CardFooter>
+              )}
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="active_users" className="mt-0">
+            <Card>
+              <CardHeader>
+                <CardTitle>Active Users</CardTitle>
+                <CardDescription>
+                  Currently active users: {activeUsers.length}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {activeUsers.length === 0 ? (
+                  <div className="text-center py-4 text-gray-500">
+                    No users currently active.
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Last Active</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {activeUsers.map((user) => (
+                        <TableRow key={user.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <Avatar>
+                                <AvatarFallback className="bg-green-100 text-green-800">
+                                  {getUserInitials(user.name)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="font-medium">
+                                {user.name || "N/A"}
+                                {currentUser && user.id === currentUser.id && " (You)"}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>{user.email}</TableCell>
+                          <TableCell>
+                            <Badge className={`${getRoleBadgeColor(user.role)} font-medium px-2 py-1 rounded-md`}>
+                              {user.role || "User"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>Now</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {isAdmin && (
+            <TabsContent value="admin_requests" className="mt-0">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Admin Role Requests</CardTitle>
+                  <CardDescription>
+                    Review and manage requests for admin privileges
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {adminRequestsLoading ? (
+                    <div className="space-y-4">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <Skeleton key={i} className="h-16 w-full" />
+                      ))}
+                    </div>
+                  ) : adminRequestsError ? (
+                    <div className="text-center py-10">
+                      <div className="w-full flex justify-center mb-4">
+                        <div className="rounded-full bg-red-100 p-4">
+                          <AlertCircle className="h-10 w-10 text-red-400" />
+                        </div>
+                      </div>
+                      <p className="text-red-500">Failed to load admin requests</p>
+                      <Button 
+                        variant="outline" 
+                        className="mt-4"
+                        onClick={() => queryClient.invalidateQueries({ queryKey: ['admin_requests', 'all'] })}
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  ) : pendingRequests.length === 0 ? (
+                    <div className="text-center py-10 text-gray-500">
+                      <div className="w-full flex justify-center mb-4">
+                        <div className="rounded-full bg-gray-100 p-4">
+                          <Shield className="h-10 w-10 text-gray-400" />
+                        </div>
+                      </div>
+                      <p>No pending admin requests</p>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>User</TableHead>
+                          <TableHead>Requested</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {pendingRequests.map((request) => (
+                          <TableRow key={request.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <Avatar>
+                                  <AvatarFallback className="bg-yellow-100 text-yellow-800">
+                                    {getUserInitials(request.name)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <div className="font-medium">{request.name}</div>
+                                  <div className="text-sm text-muted-foreground">{request.email}</div>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>{formatDate(request.requested_at)}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  className="border-green-500 hover:bg-green-50 text-green-700"
+                                  onClick={() => approveRequest.mutate({ 
+                                    requestId: request.id, 
+                                    userId: request.user_id 
+                                  })}
+                                  disabled={approveRequest.isPending}
+                                >
+                                  <Check className="h-4 w-4 mr-1" />
+                                  Approve
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  className="border-red-500 hover:bg-red-50 text-red-700"
+                                  onClick={() => rejectRequest.mutate(request.id)}
+                                  disabled={rejectRequest.isPending}
+                                >
+                                  <X className="h-4 w-4 mr-1" />
+                                  Reject
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+        </Tabs>
+      </div>
+    </DashboardLayout>
+  );
+};
+
+export default Users;
