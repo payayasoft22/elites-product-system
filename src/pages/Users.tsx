@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
@@ -23,7 +22,6 @@ import {
   Shield, 
   User as UserIcon, 
   X, 
-  Filter,
   RefreshCcw
 } from "lucide-react";
 
@@ -50,12 +48,13 @@ const Users = () => {
     requestAdminRole, 
     approveRequest, 
     rejectRequest,
-    hasPendingRequest 
+    hasPendingRequest,
+    requestsLoading: adminRequestsLoading,
+    error: adminRequestsError
   } = useAdminRequests();
 
   const pendingRequests = allRequests?.filter(req => req.status === "pending") || [];
 
-  // Query to fetch all registered users from Supabase Auth
   const { data: users, isLoading, error, refetch } = useQuery({
     queryKey: ["users"],
     queryFn: async () => {
@@ -68,13 +67,12 @@ const Users = () => {
           throw profilesError;
         }
 
-        // Map the profiles to our User interface
         const mappedUsers: User[] = profiles.map((profile: any) => ({
           id: profile.id,
           name: profile.first_name || profile.name || "N/A",
           email: profile.email || "N/A",
           role: profile.role || "user",
-          status: profile.last_sign_in_at ? "active" : "inactive" as "active" | "inactive",
+          status: profile.last_sign_in_at ? "active" : "inactive",
           created_at: profile.created_at,
           last_sign_in_at: profile.last_sign_in_at
         }));
@@ -92,7 +90,6 @@ const Users = () => {
     }
   });
 
-  // Mutation to update user role
   const updateUserRole = useMutation({
     mutationFn: async ({ userId, newRole }: { userId: string; newRole: string }) => {
       const { error } = await supabase
@@ -110,7 +107,7 @@ const Users = () => {
       });
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast({
         title: "Update failed",
         description: error.message || "Failed to update user role.",
@@ -119,7 +116,6 @@ const Users = () => {
     }
   });
 
-  // Set up realtime subscription for user presence
   useEffect(() => {
     const channel = supabase.channel('user_presence')
       .on('presence', { event: 'sync' }, () => {
@@ -134,7 +130,6 @@ const Users = () => {
             currentActiveUserIds.includes(user.id)
           );
           
-          // Ensure current user is included in active users
           if (currentUser && !updatedActiveUsers.some(u => u.id === currentUser.id)) {
             const currentUserData = users.find(u => u.id === currentUser.id);
             if (currentUserData) {
@@ -173,7 +168,6 @@ const Users = () => {
     }
   };
 
-  // Get the user's initials for the avatar
   const getUserInitials = (name: string | null) => {
     if (!name) return "U";
     return name
@@ -184,13 +178,52 @@ const Users = () => {
       .slice(0, 2);
   };
 
-  // Get color based on role
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'admin':
         return "bg-purple-100 text-purple-800 border-purple-300";
       default:
         return "bg-blue-100 text-blue-800 border-blue-300";
+    }
+  };
+
+  const handleRequestAdminRole = async () => {
+    try {
+      await requestAdminRole.mutateAsync();
+    } catch (error) {
+      console.error("Admin request failed:", error);
+    }
+  };
+
+  const handleApproveRequest = async (requestId: string, userId: string) => {
+    try {
+      await approveRequest.mutateAsync({ requestId, userId });
+      toast({
+        title: "Request Approved",
+        description: "The user has been granted admin privileges.",
+      });
+    } catch (error) {
+      toast({
+        title: "Approval Failed",
+        description: "Failed to approve the admin request.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRejectRequest = async (requestId: string) => {
+    try {
+      await rejectRequest.mutateAsync(requestId);
+      toast({
+        title: "Request Rejected",
+        description: "The admin request has been rejected.",
+      });
+    } catch (error) {
+      toast({
+        title: "Rejection Failed",
+        description: "Failed to reject the admin request.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -348,7 +381,7 @@ const Users = () => {
                 <CardFooter className="flex justify-center pt-2 pb-4">
                   <Button
                     variant="outline"
-                    onClick={() => requestAdminRole.mutate()}
+                    onClick={handleRequestAdminRole}
                     disabled={requestAdminRole.isPending}
                   >
                     Request Admin Role
@@ -436,7 +469,29 @@ const Users = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {pendingRequests.length === 0 ? (
+                  {adminRequestsLoading ? (
+                    <div className="space-y-4">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <Skeleton key={i} className="h-16 w-full" />
+                      ))}
+                    </div>
+                  ) : adminRequestsError ? (
+                    <div className="text-center py-10">
+                      <div className="w-full flex justify-center mb-4">
+                        <div className="rounded-full bg-red-100 p-4">
+                          <AlertCircle className="h-10 w-10 text-red-400" />
+                        </div>
+                      </div>
+                      <p className="text-red-500">Failed to load admin requests</p>
+                      <Button 
+                        variant="outline" 
+                        className="mt-4"
+                        onClick={() => queryClient.invalidateQueries({ queryKey: ['admin_requests', 'all'] })}
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  ) : pendingRequests.length === 0 ? (
                     <div className="text-center py-10 text-gray-500">
                       <div className="w-full flex justify-center mb-4">
                         <div className="rounded-full bg-gray-100 p-4">
@@ -477,10 +532,7 @@ const Users = () => {
                                   size="sm" 
                                   variant="outline"
                                   className="border-green-500 hover:bg-green-50 text-green-700"
-                                  onClick={() => approveRequest.mutate({ 
-                                    requestId: request.id, 
-                                    userId: request.user_id 
-                                  })}
+                                  onClick={() => handleApproveRequest(request.id, request.user_id)}
                                   disabled={approveRequest.isPending}
                                 >
                                   <Check className="h-4 w-4 mr-1" />
@@ -490,7 +542,7 @@ const Users = () => {
                                   size="sm" 
                                   variant="outline"
                                   className="border-red-500 hover:bg-red-50 text-red-700"
-                                  onClick={() => rejectRequest.mutate(request.id)}
+                                  onClick={() => handleRejectRequest(request.id)}
                                   disabled={rejectRequest.isPending}
                                 >
                                   <X className="h-4 w-4 mr-1" />
