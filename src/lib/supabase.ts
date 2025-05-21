@@ -1,4 +1,3 @@
-// lib/supabase.ts
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -15,5 +14,8 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
 export const TABLE_NAMES = {
   NOTIFICATIONS: 'notifications',
   PRODUCTS: 'products',
-  // Add other table names as needed
+  ROLE_PERMISSIONS: 'role_permissions',
+  ADMIN_REQUESTS: 'admin_requests',
+  PROFILES: 'profiles',
+  PRICE_HISTORY: 'pricehist'
 };
