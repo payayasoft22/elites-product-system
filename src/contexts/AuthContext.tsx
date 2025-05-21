@@ -1,6 +1,6 @@
 // src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
@@ -23,6 +23,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
 
   // Check and assign first user admin privileges
@@ -91,30 +92,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     setLoading(true);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, currentSession) => {
-        if (event === "SIGNED_IN" || event === "USER_UPDATED") {
-          setSession(currentSession);
-          setUser(currentSession?.user ?? null);
-          await checkFirstUserSetup(currentSession?.user ?? null);
-          toast({
-            title: "Signed in successfully",
-            description: "Welcome to Elites Project System!",
-          });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+      setSession(currentSession);
+      setUser(currentSession?.user ?? null);
+
+      if (event === "SIGNED_IN") {
+        await checkFirstUserSetup(currentSession?.user ?? null);
+        toast({
+          title: "Signed in successfully",
+          description: "Welcome to Elites Project System!",
+        });
+        // Redirect only if user is on login or root page
+        if (location.pathname === "/login" || location.pathname === "/") {
           navigate("/dashboard");
-          setLoading(false);
-        } else if (event === "SIGNED_OUT") {
-          setUser(null);
-          setSession(null);
-          setLoading(false);
-          navigate("/login");
-          toast({
-            title: "Signed out",
-            description: "You have been signed out successfully.",
-          });
         }
+      } else if (event === "SIGNED_OUT") {
+        setUser(null);
+        setSession(null);
+        navigate("/login");
+        toast({
+          title: "Signed out",
+          description: "You have been signed out successfully.",
+        });
       }
-    );
+
+      setLoading(false);
+    });
 
     supabase.auth.getSession()
       .then(async ({ data: { session: currentSession } }) => {
@@ -131,7 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
     return () => subscription.unsubscribe();
-  }, [toast, navigate]);
+  }, [toast, navigate, location.pathname]);
 
   const login = async (email: string, password: string) => {
     setLoading(true);
@@ -296,6 +299,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     }
   };
+
+  // While loading, render a loading UI to avoid flicker
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <p>Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider
