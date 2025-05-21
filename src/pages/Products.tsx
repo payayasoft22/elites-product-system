@@ -30,7 +30,8 @@ const Products = () => {
     canDeleteProduct,
     canAddPriceHistory,
     canEditPriceHistory,
-    canDeletePriceHistory
+    canDeletePriceHistory,
+    isLoading: permissionsLoading
   } = usePermission();
 
   // State variables
@@ -58,6 +59,78 @@ const Products = () => {
       description: "You don't have permission to perform this action",
       variant: "destructive",
     });
+  };
+
+  // Data fetching
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const { data: productsData, error: productsError } = await supabase
+        .from("product")
+        .select("*")
+        .order("prodcode", { ascending: true });
+
+      if (productsError) throw productsError;
+
+      if (productsData) {
+        const productsWithPrices = await Promise.all(
+          productsData.map(async (product) => {
+            const { data: priceData, error: priceError } = await supabase
+              .from("pricehist")
+              .select("unitprice, effdate")
+              .eq("prodcode", product.prodcode)
+              .order("effdate", { ascending: false })
+              .limit(1);
+
+            if (priceError) {
+              console.error(`Error fetching price for ${product.prodcode}:`, priceError);
+              return {
+                ...product,
+                currentPrice: null,
+              };
+            }
+
+            return {
+              ...product,
+              currentPrice: priceData && priceData.length > 0 ? priceData[0].unitprice : null,
+            };
+          })
+        );
+
+        setProducts(productsWithPrices);
+      }
+    } catch (err: any) {
+      console.error("Error fetching products:", err);
+      setError(err.message);
+      toast({
+        title: "Error",
+        description: "Failed to load products. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchPriceHistory = async (prodcode: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("pricehist")
+        .select("*")
+        .eq("prodcode", prodcode)
+        .order("effdate", { ascending: false });
+
+      if (error) throw error;
+
+      setPriceHistory(data || []);
+    } catch (err: any) {
+      console.error("Error fetching price history:", err);
+      toast({
+        title: "Error",
+        description: "Failed to load price history. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   // Event handlers
@@ -95,11 +168,11 @@ const Products = () => {
   };
 
   const handleManagePriceHistory = () => {
+    if (!tempProduct) return;
     if (!canAddPriceHistory && !canEditPriceHistory && !canDeletePriceHistory && !isAdmin) {
       showPermissionDenied();
       return;
     }
-    if (!tempProduct) return;
 
     if (tempProduct.prodcode) {
       fetchPriceHistory(tempProduct.prodcode);
@@ -175,7 +248,7 @@ const Products = () => {
       setIsPriceHistorySheetOpen(false);
       setPriceHistory([]);
 
-      fetchProducts();
+      await fetchProducts();
     } catch (err: any) {
       console.error("Error adding product:", err);
       toast({
@@ -187,13 +260,13 @@ const Products = () => {
   };
 
   const onEdit = async (values: z.infer<typeof formSchema>) => {
-    if (!canEditProduct && !isAdmin) {
-      showPermissionDenied();
-      return;
-    }
-    if (!selectedProduct) return;
-
     try {
+      if (!canEditProduct && !isAdmin) {
+        showPermissionDenied();
+        return;
+      }
+      if (!selectedProduct) return;
+
       const { error: productError } = await supabase
         .from("product")
         .update({
@@ -224,7 +297,7 @@ const Products = () => {
       setIsEditProductOpen(false);
       setSelectedProduct(null);
 
-      fetchProducts();
+      await fetchProducts();
     } catch (err: any) {
       console.error("Error updating product:", err);
       toast({
@@ -236,13 +309,13 @@ const Products = () => {
   };
 
   const onDelete = async () => {
-    if (!canDeleteProduct && !isAdmin) {
-      showPermissionDenied();
-      return;
-    }
-    if (!selectedProduct) return;
-
     try {
+      if (!canDeleteProduct && !isAdmin) {
+        showPermissionDenied();
+        return;
+      }
+      if (!selectedProduct) return;
+
       const { error: priceHistError } = await supabase
         .from("pricehist")
         .delete()
@@ -265,7 +338,7 @@ const Products = () => {
       setIsDeleteConfirmOpen(false);
       setSelectedProduct(null);
 
-      fetchProducts();
+      await fetchProducts();
     } catch (err: any) {
       console.error("Error deleting product:", err);
       toast({
@@ -276,86 +349,14 @@ const Products = () => {
     }
   };
 
-  // Data fetching
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const { data: productsData, error: productsError } = await supabase
-        .from("product")
-        .select("*")
-        .order("prodcode", { ascending: true });
-
-      if (productsError) throw productsError;
-
-      if (productsData) {
-        const productsWithPrices = await Promise.all(
-          productsData.map(async (product) => {
-            const { data: priceData, error: priceError } = await supabase
-              .from("pricehist")
-              .select("unitprice, effdate")
-              .eq("prodcode", product.prodcode)
-              .order("effdate", { ascending: false })
-              .limit(1);
-
-            if (priceError) {
-              console.error(`Error fetching price for ${product.prodcode}:`, priceError);
-              return {
-                ...product,
-                currentPrice: null,
-              };
-            }
-
-            return {
-              ...product,
-              currentPrice: priceData && priceData.length > 0 ? priceData[0].unitprice : null,
-            };
-          })
-        );
-
-        setProducts(productsWithPrices);
-      }
-    } catch (err: any) {
-      console.error("Error fetching products:", err);
-      setError(err.message);
-      toast({
-        title: "Error",
-        description: "Failed to load products. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchPriceHistory = async (prodcode: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("pricehist")
-        .select("*")
-        .eq("prodcode", prodcode)
-        .order("effdate", { ascending: false });
-
-      if (error) throw error;
-
-      setPriceHistory(data || []);
-    } catch (err: any) {
-      console.error("Error fetching price history:", err);
-      toast({
-        title: "Error",
-        description: "Failed to load price history. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
   const onSubmitPrice = async (values: z.infer<typeof priceHistorySchema>) => {
-    if (!canAddPriceHistory && !isAdmin) {
-      showPermissionDenied();
-      return;
-    }
-    if (!tempProduct) return;
-
     try {
+      if (!canAddPriceHistory && !isAdmin) {
+        showPermissionDenied();
+        return;
+      }
+      if (!tempProduct) return;
+
       const { error } = await supabase
         .from("pricehist")
         .insert({
@@ -371,7 +372,7 @@ const Products = () => {
         description: "New price has been added successfully.",
       });
 
-      fetchPriceHistory(tempProduct.prodcode);
+      await fetchPriceHistory(tempProduct.prodcode);
 
       setTempProduct({
         ...tempProduct,
@@ -390,13 +391,13 @@ const Products = () => {
   };
 
   const onEditPrice = async (values: z.infer<typeof priceHistorySchema>) => {
-    if (!canEditPriceHistory && !isAdmin) {
-      showPermissionDenied();
-      return;
-    }
-    if (!selectedPrice || !tempProduct) return;
-
     try {
+      if (!canEditPriceHistory && !isAdmin) {
+        showPermissionDenied();
+        return;
+      }
+      if (!selectedPrice || !tempProduct) return;
+
       const { error } = await supabase
         .from("pricehist")
         .update({
@@ -413,7 +414,7 @@ const Products = () => {
         description: "Price has been updated successfully.",
       });
 
-      fetchPriceHistory(tempProduct.prodcode);
+      await fetchPriceHistory(tempProduct.prodcode);
 
       if (priceHistory.length > 0 && priceHistory[0].effdate === selectedPrice.effdate) {
         setTempProduct({
@@ -435,13 +436,13 @@ const Products = () => {
   };
 
   const onDeletePrice = async () => {
-    if (!canDeletePriceHistory && !isAdmin) {
-      showPermissionDenied();
-      return;
-    }
-    if (!selectedPrice || !tempProduct) return;
-
     try {
+      if (!canDeletePriceHistory && !isAdmin) {
+        showPermissionDenied();
+        return;
+      }
+      if (!selectedPrice || !tempProduct) return;
+
       const { error } = await supabase
         .from("pricehist")
         .delete()
@@ -455,7 +456,7 @@ const Products = () => {
         description: "Price has been deleted successfully.",
       });
 
-      fetchPriceHistory(tempProduct.prodcode);
+      await fetchPriceHistory(tempProduct.prodcode);
 
       if (priceHistory.length > 0 && priceHistory[0].effdate === selectedPrice.effdate) {
         const newCurrentPrice = priceHistory.length > 1 ? priceHistory[1].unitprice : 0;
@@ -481,11 +482,24 @@ const Products = () => {
   // Effects
   useEffect(() => {
     fetchProducts();
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery]);
+
+  if (permissionsLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center p-10">
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p>Loading permissions...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
