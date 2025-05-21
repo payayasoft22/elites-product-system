@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface User {
   id: string;
@@ -16,6 +17,16 @@ interface User {
   display_name?: string;
   role?: string;
   status: 'open' | 'closed';
+  permissions?: {
+    addProduct?: {
+      edit: boolean;
+      delete: boolean;
+    };
+    priceHistory?: {
+      edit: boolean;
+      delete: boolean;
+    };
+  };
 }
 
 const UserPermissions = () => {
@@ -33,20 +44,22 @@ const UserPermissions = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, display_name, role')
+        .select('id, email, display_name, role, permissions')
         .neq('role', 'admin')
         .order('display_name', { ascending: true });
 
       if (error) throw error;
 
-      console.log("Fetched users:", data);
-
-      const usersWithStatus = (data || []).map(user => ({
+      const usersWithDefaults = (data || []).map(user => ({
         ...user,
         status: 'open' as const,
+        permissions: user.permissions || {
+          addProduct: { edit: false, delete: false },
+          priceHistory: { edit: false, delete: false }
+        }
       }));
 
-      setUsers(usersWithStatus);
+      setUsers(usersWithDefaults);
     } catch (error: any) {
       console.error('Error fetching users:', error);
       toast({
@@ -74,6 +87,51 @@ const UserPermissions = () => {
       toast({
         title: 'Error',
         description: 'Failed to update status',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const updatePermission = async (userId: string, permissionType: 'addProduct' | 'priceHistory', action: 'edit' | 'delete', value: boolean) => {
+    try {
+      setUsers(prevUsers =>
+        prevUsers.map(u => {
+          if (u.id === userId) {
+            return {
+              ...u,
+              permissions: {
+                ...u.permissions,
+                [permissionType]: {
+                  ...u.permissions?.[permissionType],
+                  [action]: value
+                }
+              }
+            };
+          }
+          return u;
+        })
+      );
+
+      // Update in database
+      const userToUpdate = users.find(u => u.id === userId);
+      if (userToUpdate) {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ permissions: userToUpdate.permissions })
+          .eq('id', userId);
+
+        if (error) throw error;
+      }
+
+      toast({
+        title: 'Permission Updated',
+        description: `Updated ${permissionType} ${action} permission`,
+      });
+    } catch (error: any) {
+      console.error('Error updating permission:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update permission',
         variant: 'destructive',
       });
     }
@@ -116,47 +174,86 @@ const UserPermissions = () => {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Permissions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {users.map(user => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.display_name || 'Unknown'}</TableCell>
+                      <TableCell className="font-medium">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="hover:underline">
+                              {user.display_name || 'Unknown'}
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className="w-56">
+                            <DropdownMenuItem className="flex flex-col items-start gap-2 p-3">
+                              <div className="flex items-center justify-between w-full">
+                                <span>Add Product</span>
+                              </div>
+                              <div className="flex items-center justify-between w-full pl-4">
+                                <span>Edit</span>
+                                <Switch
+                                  checked={user.permissions?.addProduct?.edit || false}
+                                  onCheckedChange={(checked) => updatePermission(user.id, 'addProduct', 'edit', checked)}
+                                />
+                              </div>
+                              <div className="flex items-center justify-between w-full pl-4">
+                                <span>Delete</span>
+                                <Switch
+                                  checked={user.permissions?.addProduct?.delete || false}
+                                  onCheckedChange={(checked) => updatePermission(user.id, 'addProduct', 'delete', checked)}
+                                />
+                              </div>
+                            </DropdownMenuItem>
+
+                            <DropdownMenuItem className="flex flex-col items-start gap-2 p-3">
+                              <div className="flex items-center justify-between w-full">
+                                <span>Price History</span>
+                              </div>
+                              <div className="flex items-center justify-between w-full pl-4">
+                                <span>Edit</span>
+                                <Switch
+                                  checked={user.permissions?.priceHistory?.edit || false}
+                                  onCheckedChange={(checked) => updatePermission(user.id, 'priceHistory', 'edit', checked)}
+                                />
+                              </div>
+                              <div className="flex items-center justify-between w-full pl-4">
+                                <span>Delete</span>
+                                <Switch
+                                  checked={user.permissions?.priceHistory?.delete || false}
+                                  onCheckedChange={(checked) => updatePermission(user.id, 'priceHistory', 'delete', checked)}
+                                />
+                              </div>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
+                        <Select
+                          value={user.status}
+                          onValueChange={(value: 'open' | 'closed') => updateUserStatus(user.id, value)}
+                        >
+                          <SelectTrigger className="w-[120px]">
+                            <SelectValue placeholder="Select status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="open">Open</SelectItem>
+                            <SelectItem value="closed">Closed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
                         <div className="flex gap-2">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="outline">Add Product</Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                              <DropdownMenuItem className="flex items-center justify-between gap-4">
-                                Edit
-                                <Switch />
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center justify-between gap-4">
-                                Delete
-                                <Switch />
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="outline">Price History</Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                              <DropdownMenuItem className="flex items-center justify-between gap-4">
-                                Edit
-                                <Switch />
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center justify-between gap-4">
-                                Delete
-                                <Switch />
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <Button variant="outline" size="sm">
+                            Add Product: {user.permissions?.addProduct?.edit ? 'Edit✅' : 'Edit❌'} {user.permissions?.addProduct?.delete ? 'Delete✅' : 'Delete❌'}
+                          </Button>
+                          <Button variant="outline" size="sm">
+                            Price History: {user.permissions?.priceHistory?.edit ? 'Edit✅' : 'Edit❌'} {user.permissions?.priceHistory?.delete ? 'Delete✅' : 'Delete❌'}
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
