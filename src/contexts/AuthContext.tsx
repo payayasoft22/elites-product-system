@@ -134,150 +134,107 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
   
   const signup = async (email: string, password: string, name?: string) => {
-    setLoading(true);
-    try {
-      // Validate input
-      if (!email) throw new Error("Email is required");
+  setLoading(true);
+  try {
+    // Prepare profile data
+    const [firstName, ...lastNameParts] = (name || '').split(' ');
+    const lastName = lastNameParts.join(' ') || null;
+    const displayName = name || email.split('@')[0];
 
-      const [firstName, ...lastNameParts] = (name || '').split(' ');
-      const lastName = lastNameParts.join(' ') || null;
-      const displayName = name || email.split('@')[0];
+    // 1. First check if this will be the first user
+    const { count } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true });
+    const isFirstUser = count === 0;
 
-      // 1. Check if this will be the first user
-      const { count } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true });
-
-      const isFirstUser = count === 0;
-
-      // 2. Create auth user
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            first_name: firstName,
-            last_name: lastName,
-            full_name: name || displayName
-          },
-          emailRedirectTo: `${window.location.origin}/dashboard`
-        }
-      });
-
-      if (error) throw error;
-
-      // 3. Create profile with appropriate role
-      if (data.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .upsert({
-            id: data.user.id,
-            email,
-            first_name: firstName,
-            last_name: lastName,
-            display_name: displayName,
-            role: isFirstUser ? 'admin' : 'user',
-            is_first_user: isFirstUser
-          }, {
-            onConflict: 'id'
-          });
-
-        if (profileError) throw profileError;
-
-        // 4. If first user, set up permissions
-        if (isFirstUser) {
-          const actions = [
-            'add_product', 'delete_product', 'edit_product',
-            'add_price_history', 'delete_price_history', 'edit_price_history'
-          ];
-
-          await supabase
-            .from('role_permissions')
-            .upsert(
-              actions.map(action => ({
-                role: 'admin',
-                action,
-                allowed: true
-              })),
-              { onConflict: 'role,action' }
-            );
-        }
+    // 2. Create auth user first
+    const { data: { user }, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          first_name: firstName,
+          last_name: lastName,
+          full_name: name || displayName
+        },
+        emailRedirectTo: `${window.location.origin}/dashboard`
       }
+    });
 
-      toast({
-        title: "Account created",
-        description: isFirstUser 
-          ? "First admin account created successfully!" 
-          : "Please check your email to confirm your account",
+    if (authError) throw authError;
+    if (!user) throw new Error('User creation failed - no user returned');
+
+    // 3. Now create the profile with a small delay to ensure user exists
+    await new Promise(resolve => setTimeout(resolve, 500)); // Small delay
+    
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .upsert({
+        id: user.id,
+        email,
+        first_name: firstName,
+        last_name: lastName,
+        display_name: displayName,
+        role: isFirstUser ? 'admin' : 'user',
+        is_first_user: isFirstUser,
+        status: 'active'
+      }, {
+        onConflict: 'id'
       });
 
-    } catch (error: any) {
-      console.error("Signup error:", error);
-      toast({
-        title: "Signup failed",
-        description: error.message.includes("row-level security") 
-          ? "Permission denied during signup" 
-          : error.message || "Failed to create account",
-        variant: "destructive"
-      });
-      throw error;
-    } finally {
-      setLoading(false);
+    if (profileError) {
+      // If profile creation fails, delete the auth user to maintain consistency
+      await supabase.auth.admin.deleteUser(user.id);
+      throw profileError;
     }
-  };
-  
-  const resetPassword = async (email: string) => {
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-      if (error) throw error;
-      toast({
-        title: "Password reset email sent",
-        description: "Check your email for a link to reset your password.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Password reset failed",
-        description: error.message || "Failed to send reset email. Please try again.",
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
-      setLoading(false);
+
+    // 4. If first user, set up permissions
+    if (isFirstUser) {
+      const actions = [
+        'add_product', 'delete_product', 'edit_product',
+        'add_price_history', 'delete_price_history', 'edit_price_history'
+      ];
+
+      await supabase
+        .from('role_permissions')
+        .upsert(
+          actions.map(action => ({
+            role: 'admin',
+            action,
+            allowed: true
+          })),
+          { onConflict: 'role,action' }
+        );
     }
-  };
-  
-  const logout = async () => {
-    try {
-      await supabase.auth.signOut();
-      navigate("/login");
-    } catch (error: any) {
-      toast({
-        title: "Logout failed",
-        description: "Failed to log out. Please try again.",
-        variant: "destructive",
-      });
+
+    toast({
+      title: "Account created",
+      description: isFirstUser 
+        ? "First admin account created successfully!" 
+        : "Please check your email to confirm your account",
+    });
+
+    return user;
+
+  } catch (error: any) {
+    console.error("Signup error:", error);
+    
+    let errorMessage = error.message;
+    if (error.code === '23503') { // Foreign key violation
+      errorMessage = "Account creation failed due to system error. Please try again or contact support.";
+    } else if (error.message.includes('duplicate key value')) {
+      errorMessage = "An account with this email already exists.";
     }
-  };
-  
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        session,
-        loading,
-        login,
-        signup,
-        logout,
-        resetPassword,
-        isAuthenticated: !!user,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+
+    toast({
+      title: "Signup failed",
+      description: errorMessage,
+      variant: "destructive"
+    });
+    throw error;
+  } finally {
+    setLoading(false);
+  }
 };
 
 export const useAuth = () => {
