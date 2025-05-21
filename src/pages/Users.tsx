@@ -43,6 +43,7 @@ const Users = () => {
   const { user: currentUser } = useAuth();
   const { isAdmin } = usePermission();
   const queryClient = useQueryClient();
+  
   const { 
     allRequests, 
     requestAdminRole, 
@@ -63,11 +64,9 @@ const Users = () => {
           .from('profiles')
           .select('*');
 
-        if (profilesError) {
-          throw profilesError;
-        }
+        if (profilesError) throw profilesError;
 
-        const mappedUsers: User[] = profiles.map((profile: any) => ({
+        return profiles.map((profile: any) => ({
           id: profile.id,
           name: profile.first_name || profile.name || "N/A",
           email: profile.email || "N/A",
@@ -76,13 +75,11 @@ const Users = () => {
           created_at: profile.created_at,
           last_sign_in_at: profile.last_sign_in_at
         }));
-
-        return mappedUsers;
       } catch (error) {
         console.error("Error fetching users:", error);
         toast({
           title: "Error",
-          description: "Failed to fetch users. Please try again later.",
+          description: "Failed to fetch users.",
           variant: "destructive",
         });
         throw error;
@@ -96,21 +93,19 @@ const Users = () => {
         .from('profiles')
         .update({ role: newRole })
         .eq('id', userId);
-
       if (error) throw error;
-      return { userId, newRole };
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
       toast({
         title: "Role updated",
-        description: "User role has been updated successfully.",
+        description: "User role updated successfully.",
       });
-      queryClient.invalidateQueries({ queryKey: ["users"] });
     },
     onError: (error: Error) => {
       toast({
         title: "Update failed",
-        description: error.message || "Failed to update user role.",
+        description: error.message,
         variant: "destructive",
       });
     }
@@ -123,7 +118,7 @@ const Users = () => {
         const currentActiveUserIds = Object.values(presenceState)
           .flat()
           .map((presence: any) => presence.user_id)
-          .filter((id): id is string => Boolean(id));
+          .filter(Boolean);
 
         if (users) {
           const updatedActiveUsers = users.filter(user => 
@@ -132,9 +127,7 @@ const Users = () => {
           
           if (currentUser && !updatedActiveUsers.some(u => u.id === currentUser.id)) {
             const currentUserData = users.find(u => u.id === currentUser.id);
-            if (currentUserData) {
-              updatedActiveUsers.push(currentUserData);
-            }
+            if (currentUserData) updatedActiveUsers.push(currentUserData);
           }
           
           setActiveUsers(updatedActiveUsers);
@@ -163,31 +156,22 @@ const Users = () => {
     if (!dateString) return "N/A";
     try {
       return format(new Date(dateString), 'MMM d, yyyy');
-    } catch (error) {
+    } catch {
       return "Invalid date";
     }
   };
 
   const getUserInitials = (name: string | null) => {
-    if (!name) return "U";
-    return name
-      .split(' ')
-      .map(part => part[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
+    return name ? name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2) : "U";
   };
 
   const getRoleBadgeColor = (role: string) => {
-    switch (role) {
-      case 'admin':
-        return "bg-purple-100 text-purple-800 border-purple-300";
-      default:
-        return "bg-blue-100 text-blue-800 border-blue-300";
-    }
+    return role === 'admin' 
+      ? "bg-purple-100 text-purple-800 border-purple-300" 
+      : "bg-blue-100 text-blue-800 border-blue-300";
   };
 
-  const handleRequestAdminRole = async () => {
+  const handleRequestAdmin = async () => {
     try {
       await requestAdminRole.mutateAsync();
     } catch (error) {
@@ -198,32 +182,16 @@ const Users = () => {
   const handleApproveRequest = async (requestId: string, userId: string) => {
     try {
       await approveRequest.mutateAsync({ requestId, userId });
-      toast({
-        title: "Request Approved",
-        description: "The user has been granted admin privileges.",
-      });
     } catch (error) {
-      toast({
-        title: "Approval Failed",
-        description: "Failed to approve the admin request.",
-        variant: "destructive",
-      });
+      console.error("Approval failed:", error);
     }
   };
 
   const handleRejectRequest = async (requestId: string) => {
     try {
       await rejectRequest.mutateAsync(requestId);
-      toast({
-        title: "Request Rejected",
-        description: "The admin request has been rejected.",
-      });
     } catch (error) {
-      toast({
-        title: "Rejection Failed",
-        description: "Failed to reject the admin request.",
-        variant: "destructive",
-      });
+      console.error("Rejection failed:", error);
     }
   };
 
@@ -245,15 +213,13 @@ const Users = () => {
             >
               <RefreshCcw className="h-4 w-4" />
             </Button>
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search users..."
-                className="px-4 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
+            <input
+              type="text"
+              placeholder="Search users..."
+              className="px-4 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
         </div>
         
@@ -273,34 +239,29 @@ const Users = () => {
             )}
           </TabsList>
 
+          {/* All Users Tab */}
           <TabsContent value="all_users" className="mt-0">
             <Card>
               <CardHeader>
                 <CardTitle>All Users</CardTitle>
                 <CardDescription>
-                  Total registered users: {filteredUsers?.length || 0}
+                  {filteredUsers?.length || 0} registered users
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <div className="space-y-2">
-                    {Array.from({ length: 3 }).map((_, i) => (
-                      <div key={i} className="flex gap-4 items-center">
-                        <Skeleton className="h-12 w-12 rounded-full" />
-                        <div className="space-y-2">
-                          <Skeleton className="h-4 w-[250px]" />
-                          <Skeleton className="h-4 w-[200px]" />
-                        </div>
-                      </div>
+                  <div className="space-y-4">
+                    {[...Array(3)].map((_, i) => (
+                      <Skeleton key={i} className="h-16 w-full" />
                     ))}
                   </div>
                 ) : error ? (
                   <div className="text-center py-4 text-red-500">
-                    Error loading users: {(error as Error).message}
+                    Error loading users
                   </div>
                 ) : filteredUsers?.length === 0 ? (
                   <div className="text-center py-4 text-gray-500">
-                    No users found matching your search.
+                    No matching users found
                   </div>
                 ) : (
                   <Table>
@@ -308,7 +269,7 @@ const Users = () => {
                       <TableRow>
                         <TableHead>User</TableHead>
                         <TableHead>Role</TableHead>
-                        <TableHead>Joined Date</TableHead>
+                        <TableHead>Joined</TableHead>
                         {isAdmin && <TableHead>Actions</TableHead>}
                       </TableRow>
                     </TableHeader>
@@ -318,15 +279,15 @@ const Users = () => {
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <Avatar>
-                                <AvatarFallback className="bg-primary text-primary-foreground">
+                                <AvatarFallback>
                                   {getUserInitials(user.name)}
                                 </AvatarFallback>
                               </Avatar>
                               <div>
                                 <div className="font-medium flex items-center gap-2">
-                                  {user.name || "N/A"}
-                                  {currentUser && user.id === currentUser.id && (
-                                    <Badge variant="outline" className="ml-1">You</Badge>
+                                  {user.name}
+                                  {currentUser?.id === user.id && (
+                                    <Badge variant="outline">You</Badge>
                                   )}
                                 </div>
                                 <div className="text-sm text-muted-foreground">
@@ -336,32 +297,32 @@ const Users = () => {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge className={`${getRoleBadgeColor(user.role)} font-medium px-2 py-1 rounded-md`}>
+                            <Badge className={`${getRoleBadgeColor(user.role)}`}>
                               {user.role === 'admin' ? (
-                                <div className="flex items-center gap-1">
-                                  <Shield className="h-3 w-3" />
-                                  <span>Admin</span>
-                                </div>
+                                <>
+                                  <Shield className="h-3 w-3 mr-1" />
+                                  Admin
+                                </>
                               ) : (
-                                <div className="flex items-center gap-1">
-                                  <UserIcon className="h-3 w-3" />
-                                  <span>User</span>
-                                </div>
+                                <>
+                                  <UserIcon className="h-3 w-3 mr-1" />
+                                  User
+                                </>
                               )}
                             </Badge>
                           </TableCell>
                           <TableCell>{formatDate(user.created_at)}</TableCell>
                           {isAdmin && (
                             <TableCell>
-                              {currentUser && user.id !== currentUser.id && (
+                              {currentUser?.id !== user.id && (
                                 <Select
-                                  defaultValue={user.role}
-                                  onValueChange={(value) => {
-                                    updateUserRole.mutate({ userId: user.id, newRole: value });
-                                  }}
+                                  value={user.role}
+                                  onValueChange={(value) => 
+                                    updateUserRole.mutate({ userId: user.id, newRole: value })
+                                  }
                                 >
                                   <SelectTrigger className="w-[120px]">
-                                    <SelectValue placeholder="Select role" />
+                                    <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="user">User</SelectItem>
@@ -377,58 +338,57 @@ const Users = () => {
                   </Table>
                 )}
               </CardContent>
-              {!isAdmin && !hasPendingRequest && (
+              {!isAdmin && (
                 <CardFooter className="flex justify-center pt-2 pb-4">
-                  <Button
-                    variant="outline"
-                    onClick={handleRequestAdminRole}
-                    disabled={requestAdminRole.isPending}
-                  >
-                    Request Admin Role
-                    {requestAdminRole.isPending && (
-                      <div className="ml-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    )}
-                  </Button>
-                </CardFooter>
-              )}
-              {!isAdmin && hasPendingRequest && (
-                <CardFooter className="flex justify-center pt-2 pb-4">
-                  <Badge variant="outline" className="py-2 px-3">
-                    <div className="flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4 text-yellow-500" />
-                      Admin request pending approval
-                    </div>
-                  </Badge>
+                  {hasPendingRequest ? (
+                    <Badge variant="outline" className="py-2 px-3">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 text-yellow-500" />
+                        Admin request pending
+                      </div>
+                    </Badge>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={handleRequestAdmin}
+                      disabled={requestAdminRole.isPending}
+                    >
+                      Request Admin Role
+                      {requestAdminRole.isPending && (
+                        <span className="ml-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      )}
+                    </Button>
+                  )}
                 </CardFooter>
               )}
             </Card>
           </TabsContent>
 
+          {/* Active Users Tab */}
           <TabsContent value="active_users" className="mt-0">
             <Card>
               <CardHeader>
                 <CardTitle>Active Users</CardTitle>
                 <CardDescription>
-                  Currently active users: {activeUsers.length}
+                  {activeUsers.length} currently active
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {activeUsers.length === 0 ? (
                   <div className="text-center py-4 text-gray-500">
-                    No users currently active.
+                    No active users
                   </div>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Email</TableHead>
+                        <TableHead>User</TableHead>
                         <TableHead>Role</TableHead>
-                        <TableHead>Last Active</TableHead>
+                        <TableHead>Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {activeUsers.map((user) => (
+                      {activeUsers.map(user => (
                         <TableRow key={user.id}>
                           <TableCell>
                             <div className="flex items-center gap-3">
@@ -437,19 +397,18 @@ const Users = () => {
                                   {getUserInitials(user.name)}
                                 </AvatarFallback>
                               </Avatar>
-                              <div className="font-medium">
-                                {user.name || "N/A"}
-                                {currentUser && user.id === currentUser.id && " (You)"}
+                              <div>
+                                {user.name}
+                                {currentUser?.id === user.id && " (You)"}
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell>{user.email}</TableCell>
                           <TableCell>
-                            <Badge className={`${getRoleBadgeColor(user.role)} font-medium px-2 py-1 rounded-md`}>
-                              {user.role || "User"}
+                            <Badge className={`${getRoleBadgeColor(user.role)}`}>
+                              {user.role}
                             </Badge>
                           </TableCell>
-                          <TableCell>Now</TableCell>
+                          <TableCell>Online</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -459,19 +418,20 @@ const Users = () => {
             </Card>
           </TabsContent>
 
+          {/* Admin Requests Tab */}
           {isAdmin && (
             <TabsContent value="admin_requests" className="mt-0">
               <Card>
                 <CardHeader>
-                  <CardTitle>Admin Role Requests</CardTitle>
+                  <CardTitle>Admin Requests</CardTitle>
                   <CardDescription>
-                    Review and manage requests for admin privileges
+                    {pendingRequests.length} pending requests
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {adminRequestsLoading ? (
                     <div className="space-y-4">
-                      {Array.from({ length: 3 }).map((_, i) => (
+                      {[...Array(3)].map((_, i) => (
                         <Skeleton key={i} className="h-16 w-full" />
                       ))}
                     </div>
@@ -482,11 +442,11 @@ const Users = () => {
                           <AlertCircle className="h-10 w-10 text-red-400" />
                         </div>
                       </div>
-                      <p className="text-red-500">Failed to load admin requests</p>
+                      <p className="text-red-500">Failed to load requests</p>
                       <Button 
                         variant="outline" 
                         className="mt-4"
-                        onClick={() => queryClient.invalidateQueries({ queryKey: ['admin_requests', 'all'] })}
+                        onClick={() => queryClient.invalidateQueries(['admin_requests'])}
                       >
                         Retry
                       </Button>
@@ -498,7 +458,7 @@ const Users = () => {
                           <Shield className="h-10 w-10 text-gray-400" />
                         </div>
                       </div>
-                      <p>No pending admin requests</p>
+                      <p>No pending requests</p>
                     </div>
                   ) : (
                     <Table>
@@ -510,7 +470,7 @@ const Users = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {pendingRequests.map((request) => (
+                        {pendingRequests.map(request => (
                           <TableRow key={request.id}>
                             <TableCell>
                               <div className="flex items-center gap-3">
@@ -527,21 +487,21 @@ const Users = () => {
                             </TableCell>
                             <TableCell>{formatDate(request.requested_at)}</TableCell>
                             <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Button 
-                                  size="sm" 
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
                                   variant="outline"
-                                  className="border-green-500 hover:bg-green-50 text-green-700"
+                                  className="border-green-500 text-green-700 hover:bg-green-50"
                                   onClick={() => handleApproveRequest(request.id, request.user_id)}
                                   disabled={approveRequest.isPending}
                                 >
                                   <Check className="h-4 w-4 mr-1" />
                                   Approve
                                 </Button>
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="outline"
-                                  className="border-red-500 hover:bg-red-50 text-red-700"
+                                  className="border-red-500 text-red-700 hover:bg-red-50"
                                   onClick={() => handleRejectRequest(request.id)}
                                   disabled={rejectRequest.isPending}
                                 >
