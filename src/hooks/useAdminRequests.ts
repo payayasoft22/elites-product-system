@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,7 +10,6 @@ export interface AdminRequest {
   requested_at: string;
   resolved_at: string | null;
   resolved_by: string | null;
-  // User details (from a join)
   name?: string;
   email?: string;
 }
@@ -45,7 +43,6 @@ export function useAdminRequests() {
   const { data: allRequests, isLoading: requestsLoading } = useQuery({
     queryKey: ["admin_requests", "all"],
     queryFn: async () => {
-      // Join with profiles to get user details
       const { data, error } = await supabase
         .from("admin_requests")
         .select(`
@@ -62,9 +59,7 @@ export function useAdminRequests() {
         throw error;
       }
       
-      // Transform the data to flatten it
       return data.map(req => {
-        // Type assertion for the profiles property
         const profiles = req.profiles as { name?: string; first_name?: string; email?: string } | null;
         
         return {
@@ -109,7 +104,6 @@ export function useAdminRequests() {
     mutationFn: async ({ requestId, userId }: { requestId: string, userId: string }) => {
       if (!user?.id) throw new Error("No user ID available");
       
-      // First update the admin request
       const { error: requestError } = await supabase
         .from("admin_requests")
         .update({
@@ -121,7 +115,6 @@ export function useAdminRequests() {
       
       if (requestError) throw requestError;
       
-      // Then update the user's role to admin
       const { error: profileError } = await supabase
         .from("profiles")
         .update({ role: "admin" })
