@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 interface User {
   id: string;
   email: string;
-  name: string;
+  display_name?: string;
   role?: string;
   status: 'open' | 'closed';
 }
@@ -31,9 +31,9 @@ const UserPermissions = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, name, role')
+        .select('id, email, display_name, role')
         .neq('role', 'admin')  // exclude admins
-        .order('name', { ascending: true });
+        .order('display_name', { ascending: true });
 
       if (error) throw error;
 
@@ -123,7 +123,7 @@ const UserPermissions = () => {
                 <TableBody>
                   {users.map(user => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.name || 'Unknown'}</TableCell>
+                      <TableCell className="font-medium">{user.display_name || 'Unknown'}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
                         <Select
