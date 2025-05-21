@@ -1,9 +1,8 @@
-
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { PermissionAction } from "@/integrations/supabase/client";
+import { PermissionAction } from "@/hooks/usePermission";
 
 export interface PermissionRequest {
   id: string;
@@ -22,7 +21,6 @@ export function usePermissionRequests() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Get permission requests for the current user
   const { data: userRequests, isLoading: userRequestsLoading } = useQuery({
     queryKey: ["permission_requests", "user", user?.id],
     queryFn: async () => {
@@ -44,7 +42,6 @@ export function usePermissionRequests() {
     enabled: !!user,
   });
 
-  // Get all permission requests (for admins)
   const { data: allRequests, isLoading: allRequestsLoading } = useQuery({
     queryKey: ["permission_requests", "all"],
     queryFn: async () => {
@@ -61,7 +58,6 @@ export function usePermissionRequests() {
         throw error;
       }
       
-      // Transform data to include user details
       return (data || []).map((item: any) => ({
         ...item,
         user_email: item.profiles?.email,
@@ -71,7 +67,6 @@ export function usePermissionRequests() {
     enabled: !!user,
   });
 
-  // Request a permission
   const requestPermission = useMutation({
     mutationFn: async (action: PermissionAction) => {
       if (!user?.id) throw new Error("User not authenticated");
@@ -88,7 +83,6 @@ export function usePermissionRequests() {
       
       if (error) throw error;
       
-      // Notify admins
       const { data: admins } = await supabase
         .from("profiles")
         .select("id")
@@ -124,12 +118,10 @@ export function usePermissionRequests() {
     },
   });
 
-  // Approve a permission request
   const approveRequest = useMutation({
     mutationFn: async (requestId: string) => {
       if (!user?.id) throw new Error("User not authenticated");
       
-      // Get the request details
       const { data: request, error: requestError } = await supabase
         .from("admin_requests")
         .select("*")
@@ -138,7 +130,6 @@ export function usePermissionRequests() {
       
       if (requestError) throw requestError;
       
-      // Update request status
       const { error: updateError } = await supabase
         .from("admin_requests")
         .update({ 
@@ -150,9 +141,7 @@ export function usePermissionRequests() {
       
       if (updateError) throw updateError;
       
-      // Ensure action exists before using it
       if (request && 'action' in request) {
-        // Notify the user
         await supabase.from("notifications").insert({
           type: "permission_request_resolved",
           content: JSON.stringify({
@@ -182,12 +171,10 @@ export function usePermissionRequests() {
     },
   });
 
-  // Reject a permission request
   const rejectRequest = useMutation({
     mutationFn: async (requestId: string) => {
       if (!user?.id) throw new Error("User not authenticated");
       
-      // Get the request details
       const { data: request, error: requestError } = await supabase
         .from("admin_requests")
         .select("*")
@@ -196,7 +183,6 @@ export function usePermissionRequests() {
       
       if (requestError) throw requestError;
       
-      // Update request status
       const { error: updateError } = await supabase
         .from("admin_requests")
         .update({ 
@@ -208,9 +194,7 @@ export function usePermissionRequests() {
       
       if (updateError) throw updateError;
       
-      // Ensure action exists before using it
       if (request && 'action' in request) {
-        // Notify the user
         await supabase.from("notifications").insert({
           type: "permission_request_resolved",
           content: JSON.stringify({
@@ -240,7 +224,6 @@ export function usePermissionRequests() {
     },
   });
 
-  // Check if user has a pending request for a specific action
   const hasPendingRequest = (action: PermissionAction): boolean => {
     if (!userRequests) return false;
     
