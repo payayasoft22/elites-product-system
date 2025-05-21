@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -88,61 +87,48 @@ const Products = () => {
   };
 
   // CRUD operations
- const onSubmit = async (values: z.infer<typeof formSchema>) => {
-  try {
-    // First check if product already exists
-    const { data: existingProduct, error: checkError } = await supabase
-      .from('product')
-      .select('prodcode')
-      .eq('prodcode', values.prodcode)
-      .maybeSingle();
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    try {
+      const { error: productError } = await supabase
+        .from('product')
+        .insert({
+          prodcode: values.prodcode,
+          description: values.description,
+          unit: values.unit
+        });
 
-    if (checkError) throw checkError;
-    if (existingProduct) {
-      throw new Error(`Product with code ${values.prodcode} already exists`);
+      if (productError) throw productError;
+
+      const { error: priceError } = await supabase
+        .from('pricehist')
+        .insert({
+          prodcode: values.prodcode,
+          unitprice: values.unitprice,
+          effdate: new Date().toISOString().split('T')[0]
+        });
+
+      if (priceError) throw priceError;
+
+      toast({
+        title: "Product added successfully",
+        description: `${values.prodcode} has been added to your products.`
+      });
+
+      setIsAddProductOpen(false);
+      setTempProduct(null);
+      setIsPriceHistorySheetOpen(false);
+      setPriceHistory([]);
+
+      fetchProducts();
+    } catch (err: any) {
+      console.error('Error adding product:', err);
+      toast({
+        title: "Error adding product",
+        description: err.message || "Failed to add product. Please try again.",
+        variant: "destructive",
+      });
     }
-
-    // Proceed with insertion if product doesn't exist
-    const { error: productError } = await supabase
-      .from('product')
-      .insert({
-        prodcode: values.prodcode,
-        description: values.description,
-        unit: values.unit
-      });
-
-    if (productError) throw productError;
-
-    const { error: priceError } = await supabase
-      .from('pricehist')
-      .insert({
-        prodcode: values.prodcode,
-        unitprice: values.unitprice,
-        effdate: new Date().toISOString().split('T')[0]
-      });
-
-    if (priceError) throw priceError;
-
-    toast({
-      title: "Product added successfully",
-      description: `${values.prodcode} has been added to your products.`
-    });
-
-    setIsAddProductOpen(false);
-    setTempProduct(null);
-    setIsPriceHistorySheetOpen(false);
-    setPriceHistory([]);
-
-    fetchProducts();
-  } catch (err: any) {
-    console.error('Error adding product:', err);
-    toast({
-      title: "Error adding product",
-      description: err.message || "Failed to add product. Please try again.",
-      variant: "destructive",
-    });
-  }
-};
+  };
 
   const onEdit = async (values: z.infer<typeof formSchema>) => {
     if (!selectedProduct) return;
