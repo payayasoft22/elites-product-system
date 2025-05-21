@@ -8,6 +8,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 
 interface User {
   id: string;
@@ -33,7 +35,7 @@ const UserPermissions = () => {
       const { data, error } = await supabase
         .from('profiles')
         .select('id, email, display_name, role')
-        .neq('role', 'admin')
+        .neq('role', 'admin') // Excluding admin role from this list
         .order('display_name', { ascending: true });
 
       if (error) throw error;
@@ -42,7 +44,7 @@ const UserPermissions = () => {
 
       const usersWithStatus = (data || []).map(user => ({
         ...user,
-        status: 'open' as const,
+        status: 'open' as const, // Default status
       }));
 
       setUsers(usersWithStatus);
@@ -97,7 +99,7 @@ const UserPermissions = () => {
       <div className="space-y-6">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">User Management</h2>
-          <p className="text-muted-foreground">Manage user access status</p>
+          <p className="text-muted-foreground">Manage user access status and permissions</p>
         </div>
 
         <Card>
@@ -116,6 +118,7 @@ const UserPermissions = () => {
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -143,14 +146,6 @@ const UserPermissions = () => {
                               Price History
                               <Switch />
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="flex items-center justify-between gap-4">
-                              Edit
-                              <Switch />
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="flex items-center justify-between gap-4">
-                              Delete
-                              <Switch />
-                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -168,6 +163,24 @@ const UserPermissions = () => {
                             <SelectItem value="closed">Closed</SelectItem>
                           </SelectContent>
                         </Select>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex space-x-4">
+                          <Button
+                            variant="outline"
+                            onClick={() => toast({ title: 'Edit', description: `Editing ${user.display_name}` })}
+                            disabled={user.role === 'admin'}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            onClick={() => toast({ title: 'Delete', description: `Deleting ${user.display_name}` })}
+                            disabled={user.role === 'admin'}
+                          >
+                            Delete
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
