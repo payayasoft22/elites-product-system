@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import {
   Popover,
@@ -176,9 +175,7 @@ const NotificationsPopover = () => {
                 notifications.map((notification) => (
                   <div
                     key={notification.id}
-                    className={`border-b last:border-b-0 p-4 relative hover:bg-muted/30 transition-colors ${
-                      !notification.is_read ? "bg-primary/5" : ""
-                    }`}
+                    className={`border-b last:border-b-0 p-4 relative hover:bg-muted/30 transition-colors ${!notification.is_read ? "bg-primary/5" : ""}`}
                     onClick={() => {
                       if (!notification.is_read) {
                         handleMarkAsRead(notification.id);
@@ -188,12 +185,11 @@ const NotificationsPopover = () => {
                     {formatContent(notification)}
                     <div className="flex justify-between items-center mt-2">
                       <p className="text-xs text-muted-foreground">
-                        {notification.created_at &&
-                          format(new Date(notification.created_at), "MMM d, h:mm a")}
+                        {notification.created_at && format(new Date(notification.created_at), "MMM d, h:mm a")}
                       </p>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         className="h-6 w-6 opacity-50 hover:opacity-100"
                         onClick={(e) => handleDeleteNotification(e, notification.id)}
                       >
@@ -229,12 +225,11 @@ const NotificationsPopover = () => {
                       {formatContent(notification)}
                       <div className="flex justify-between items-center mt-2">
                         <p className="text-xs text-muted-foreground">
-                          {notification.created_at &&
-                            format(new Date(notification.created_at), "MMM d, h:mm a")}
+                          {notification.created_at && format(new Date(notification.created_at), "MMM d, h:mm a")}
                         </p>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-6 w-6 opacity-50 hover:opacity-100"
                           onClick={(e) => handleDeleteNotification(e, notification.id)}
                         >
