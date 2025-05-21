@@ -30,89 +30,105 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     try {
       const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
         .single();
 
       if (profileError) throw profileError;
-      if (profile?.role === 'admin') return;
+      if (profile?.role === "admin") return;
 
       const { count, error: countError } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true });
+        .from("profiles")
+        .select("*", { count: "exact", head: true });
 
       if (countError) throw countError;
 
       if (count === 0) {
         const { error: updateError } = await supabase
-          .from('profiles')
+          .from("profiles")
           .update({
-            role: 'admin',
+            role: "admin",
             is_first_user: true,
             updated_at: new Date().toISOString(),
           })
-          .eq('id', user.id);
+          .eq("id", user.id);
 
         if (updateError) throw updateError;
 
         const actions = [
-          'add_product', 'delete_product', 'edit_product',
-          'add_price_history', 'delete_price_history', 'edit_price_history'
+          "add_product",
+          "delete_product",
+          "edit_product",
+          "add_price_history",
+          "delete_price_history",
+          "edit_price_history",
         ];
 
         const { error: permissionError } = await supabase
-          .from('role_permissions')
+          .from("role_permissions")
           .upsert(
-            actions.map(action => ({
-              role: 'admin',
+            actions.map((action) => ({
+              role: "admin",
               action,
-              allowed: true
+              allowed: true,
             })),
-            { onConflict: 'role,action' }
+            { onConflict: "role,action" }
           );
 
         if (permissionError) throw permissionError;
 
         toast({
-          title: 'Admin privileges granted',
-          description: 'As the first user, you have full admin access.',
+          title: "Admin privileges granted",
+          description: "As the first user, you have full admin access.",
         });
       }
     } catch (error) {
-      console.error('First user setup check failed:', error);
+      console.error("First user setup check failed:", error);
     }
   };
 
   useEffect(() => {
     setLoading(true);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
-      // Only handle SIGNED_IN events here
-      if (event === 'SIGNED_IN') {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
+          await checkFirstUserSetup(currentSession?.user ?? null);
+          toast({
+            title: "Signed in successfully",
+            description: "Welcome to Elites Project System!",
+          });
+          navigate("/dashboard");
+          setLoading(false);
+        } else if (event === "SIGNED_OUT") {
+          setUser(null);
+          setSession(null);
+          setLoading(false);
+          navigate("/login");
+          toast({
+            title: "Signed out",
+            description: "You have been signed out successfully.",
+          });
+        }
+      }
+    );
+
+    supabase.auth.getSession()
+      .then(async ({ data: { session: currentSession } }) => {
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
-        await checkFirstUserSetup(currentSession?.user ?? null);
-        toast({
-          title: "Signed in successfully",
-          description: "Welcome to Elites Project System!",
-        });
-        navigate("/dashboard");
-      }
-      // SIGNED_OUT events are handled by the manual logout function
-    });
-
-    supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      if (currentSession?.user) {
-        await checkFirstUserSetup(currentSession.user);
-      }
-      setLoading(false);
-    }).catch((error) => {
-      console.error("Failed to get current session", error);
-      setLoading(false);
-    });
+        if (currentSession?.user) {
+          await checkFirstUserSetup(currentSession.user);
+        }
+        setLoading(false);
+      })
+      .catch((error) => {
+        console.error("Failed to get current session", error);
+        setLoading(false);
+      });
 
     return () => subscription.unsubscribe();
   }, [toast, navigate]);
@@ -139,20 +155,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       if (!email) throw new Error("Email is required");
 
-      const [firstName, ...lastNameParts] = (name || '').trim().split(' ');
-      const lastName = lastNameParts.join(' ') || null;
-      const displayName = name || email.split('@')[0];
+      const [firstName, ...lastNameParts] = (name || "").trim().split(" ");
+      const lastName = lastNameParts.join(" ") || null;
+      const displayName = name || email.split("@")[0];
 
-      // Check if first user
       const { count, error: countError } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true });
+        .from("profiles")
+        .select("*", { count: "exact", head: true });
 
       if (countError) throw countError;
 
       const isFirstUser = count === 0;
 
-      // Create user
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -170,38 +184,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (data.user) {
         const { error: profileError } = await supabase
-          .from('profiles')
-          .upsert({
-            id: data.user.id,
-            email,
-            first_name: firstName,
-            last_name: lastName,
-            display_name: displayName,
-            role: isFirstUser ? 'admin' : 'user',
-            is_first_user: isFirstUser,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }, {
-            onConflict: 'id',
-          });
+          .from("profiles")
+          .upsert(
+            {
+              id: data.user.id,
+              email,
+              first_name: firstName,
+              last_name: lastName,
+              display_name: displayName,
+              role: isFirstUser ? "admin" : "user",
+              is_first_user: isFirstUser,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "id" }
+          );
 
         if (profileError) throw profileError;
 
         if (isFirstUser) {
           const actions = [
-            'add_product', 'delete_product', 'edit_product',
-            'add_price_history', 'delete_price_history', 'edit_price_history'
+            "add_product",
+            "delete_product",
+            "edit_product",
+            "add_price_history",
+            "delete_price_history",
+            "edit_price_history",
           ];
 
           const { error: permissionError } = await supabase
-            .from('role_permissions')
+            .from("role_permissions")
             .upsert(
-              actions.map(action => ({
-                role: 'admin',
+              actions.map((action) => ({
+                role: "admin",
                 action,
                 allowed: true,
               })),
-              { onConflict: 'role,action' }
+              { onConflict: "role,action" }
             );
 
           if (permissionError) throw permissionError;
@@ -218,9 +237,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error("Signup error:", error);
       toast({
         title: "Signup failed",
-        description: error.message.includes("row-level security")
-          ? "Permission denied during signup"
-          : error.message || "Failed to create account",
+        description:
+          error.message.includes("row-level security")
+            ? "Permission denied during signup"
+            : error.message || "Failed to create account",
         variant: "destructive",
       });
       throw error;
@@ -255,23 +275,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     setLoading(true);
     try {
-      // Clear all cookies under the current domain
-      document.cookie.split(';').forEach(cookie => {
-        const [name] = cookie.split('=');
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname}`;
-      });
-
-      // Sign out from Supabase
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      
-      // Clear local state
+
       setUser(null);
       setSession(null);
-      
-      // Navigate to login
       navigate("/login");
-      
       toast({
         title: "Signed out",
         description: "You have been signed out successfully.",
