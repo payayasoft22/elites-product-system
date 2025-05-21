@@ -32,16 +32,16 @@ const UserPermissions = () => {
       const { data, error } = await supabase
         .from('profiles')
         .select('id, email, display_name, role')
-        .neq('role', 'admin')  // exclude admins
+        .neq('role', 'admin')
         .order('display_name', { ascending: true });
 
       if (error) throw error;
 
-      console.log("Fetched users:", data);  // Debugging output
+      console.log("Fetched users:", data);
 
       const usersWithStatus = (data || []).map(user => ({
         ...user,
-        status: 'open' as const,  // default status, you can customize or fetch real status from DB
+        status: 'open' as const,
       }));
 
       setUsers(usersWithStatus);
@@ -59,9 +59,6 @@ const UserPermissions = () => {
 
   const updateUserStatus = async (userId: string, status: 'open' | 'closed') => {
     try {
-      // For now, just update UI state.
-      // You can add DB update logic here if you store status in your DB.
-
       setUsers(prevUsers =>
         prevUsers.map(u => (u.id === userId ? { ...u, status } : u))
       );
