@@ -260,53 +260,55 @@ const Products = () => {
   };
 
   const onEdit = async (values: z.infer<typeof formSchema>) => {
-    try {
-      if (!canEditProduct && !isAdmin) {
-        showPermissionDenied();
-        return;
-      }
-      if (!selectedProduct) return;
-
-      const { error: productError } = await supabase
-        .from("product")
-        .update({
-          description: values.description,
-          unit: values.unit,
-        })
-        .eq("prodcode", selectedProduct.prodcode);
-
-      if (productError) throw productError;
-
-      if (values.unitprice !== selectedProduct.currentPrice) {
-        const { error: priceError } = await supabase
-          .from("pricehist")
-          .insert({
-            prodcode: selectedProduct.prodcode,
-            unitprice: values.unitprice,
-            effdate: new Date().toISOString().split("T")[0],
-          });
-
-        if (priceError) throw priceError;
-      }
-
-      toast({
-        title: "Product updated successfully",
-        description: `${selectedProduct.prodcode} has been updated.`,
-      });
-
-      setIsEditProductOpen(false);
-      setSelectedProduct(null);
-
-      await fetchProducts();
-    } catch (err: any) {
-      console.error("Error updating product:", err);
-      toast({
-        title: "Error updating product",
-        description: err.message || "Failed to update product. Please try again.",
-        variant: "destructive",
-      });
+  try {
+    if (!canEditProduct && !isAdmin) {
+      showPermissionDenied();
+      return;
     }
-  };
+    if (!selectedProduct) return;
+
+    // Update product details (description and unit)
+    const { error: productError } = await supabase
+      .from("product")
+      .update({
+        description: values.description,
+        unit: values.unit,
+      })
+      .eq("prodcode", selectedProduct.prodcode); // Use the original prodcode from selectedProduct
+
+    if (productError) throw productError;
+
+    // Only update price if it's changed
+    if (values.unitprice !== selectedProduct.currentPrice) {
+      const { error: priceError } = await supabase
+        .from("pricehist")
+        .insert({
+          prodcode: selectedProduct.prodcode, // Use the original prodcode
+          unitprice: values.unitprice,
+          effdate: new Date().toISOString().split("T")[0],
+        });
+
+      if (priceError) throw priceError;
+    }
+
+    toast({
+      title: "Product updated successfully",
+      description: `${selectedProduct.prodcode} has been updated.`,
+    });
+
+    setIsEditProductOpen(false);
+    setSelectedProduct(null);
+
+    await fetchProducts();
+  } catch (err: any) {
+    console.error("Error updating product:", err);
+    toast({
+      title: "Error updating product",
+      description: err.message || "Failed to update product. Please try again.",
+      variant: "destructive",
+    });
+  }
+};
 
   const onDelete = async () => {
     try {
