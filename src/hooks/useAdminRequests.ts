@@ -43,29 +43,33 @@ export function useAdminRequests() {
   const { data: allRequests, isLoading: requestsLoading } = useQuery({
     queryKey: ["admin_requests", "all"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: requestsData, error: requestsError } = await supabase
         .from("admin_requests")
-        .select(`
-          *,
-          profiles:user_id (
-            name,
-            email,
-            first_name
-          )
-        `);
+        .select("*");
       
-      if (error) {
-        console.error("Error fetching admin requests:", error);
-        throw error;
+      if (requestsError) {
+        console.error("Error fetching admin requests:", requestsError);
+        throw requestsError;
       }
+
+      // Fetch profiles separately if needed
+      const userIds = requestsData.map(req => req.user_id);
+      const { data: profilesData, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, name, first_name, email")
+        .in("id", userIds);
       
-      return data.map(req => {
-        const profiles = req.profiles as { name?: string; first_name?: string; email?: string } | null;
-        
+      if (profilesError) {
+        console.error("Error fetching profiles:", profilesError);
+        throw profilesError;
+      }
+
+      return requestsData.map(req => {
+        const profile = profilesData.find(p => p.id === req.user_id);
         return {
           ...req,
-          name: profiles?.name || profiles?.first_name || "Unknown",
-          email: profiles?.email || "Unknown"
+          name: profile?.name || profile?.first_name || "Unknown",
+          email: profile?.email || "Unknown"
         };
       });
     },
