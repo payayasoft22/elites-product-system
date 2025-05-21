@@ -522,7 +522,19 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
+export interface Product {
+  prodcode: string;
+  description: string;
+  unit: string;
+  currentPrice: number | null;
+}
 
+export interface PriceHistory {
+  prodcode: string;
+  unitprice: number;
+  effdate: string;
+  id?: number;
+}
 export const Constants = {
   public: {
     Enums: {
