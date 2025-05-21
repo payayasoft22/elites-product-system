@@ -32,14 +32,16 @@ const UserPermissions = () => {
       const { data, error } = await supabase
         .from('profiles')
         .select('id, email, name, role')
-        .neq('role', 'admin')   // Exclude admin users
+        .neq('role', 'admin')  // exclude admins
         .order('name', { ascending: true });
 
       if (error) throw error;
 
-      const usersWithStatus = data.map(user => ({
+      console.log("Fetched users:", data);  // Debugging output
+
+      const usersWithStatus = (data || []).map(user => ({
         ...user,
-        status: 'open' as const, // default status, you may change or fetch from DB
+        status: 'open' as const,  // default status, you can customize or fetch real status from DB
       }));
 
       setUsers(usersWithStatus);
@@ -47,7 +49,7 @@ const UserPermissions = () => {
       console.error('Error fetching users:', error);
       toast({
         title: 'Error',
-        description: 'Failed to load users',
+        description: `Failed to load users: ${error.message || error}`,
         variant: 'destructive',
       });
     } finally {
@@ -57,11 +59,11 @@ const UserPermissions = () => {
 
   const updateUserStatus = async (userId: string, status: 'open' | 'closed') => {
     try {
-      // Here you can add code to update user status in your database if desired.
-      // For now, we just update local state for UI purposes.
+      // For now, just update UI state.
+      // You can add DB update logic here if you store status in your DB.
 
-      setUsers(prevUsers => 
-        prevUsers.map(u => u.id === userId ? { ...u, status } : u)
+      setUsers(prevUsers =>
+        prevUsers.map(u => (u.id === userId ? { ...u, status } : u))
       );
 
       toast({
@@ -79,7 +81,13 @@ const UserPermissions = () => {
   };
 
   if (!user) {
-    return <div>Loading user information...</div>;
+    return (
+      <DashboardLayout>
+        <div className="flex justify-center items-center min-h-[300px]">
+          <p>Loading user information...</p>
+        </div>
+      </DashboardLayout>
+    );
   }
 
   return (
@@ -113,7 +121,7 @@ const UserPermissions = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => (
+                  {users.map(user => (
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">{user.name || 'Unknown'}</TableCell>
                       <TableCell>{user.email}</TableCell>
