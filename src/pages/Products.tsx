@@ -1,16 +1,15 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import * as z from "zod";
 
-// Import the extracted components
+// Import components
 import ProductList from "@/components/products/ProductList";
 import ProductForm, { formSchema } from "@/components/products/ProductForm";
 import PriceHistorySheet from "@/components/products/PriceHistorySheet";
@@ -39,6 +38,7 @@ const Products = () => {
   const [isDeletePriceOpen, setIsDeletePriceOpen] = useState<boolean>(false);
   const [selectedPrice, setSelectedPrice] = useState<PriceHistory | null>(null);
   const [tempProduct, setTempProduct] = useState<Product | null>(null);
+  const [validatingCode, setValidatingCode] = useState(false);
   const itemsPerPage = 10;
 
   // Event handlers
@@ -88,61 +88,68 @@ const Products = () => {
   };
 
   // CRUD operations
- const onSubmit = async (values: z.infer<typeof formSchema>) => {
-  try {
-    // First check if product already exists
-    const { data: existingProduct, error: checkError } = await supabase
-      .from('product')
-      .select('prodcode')
-      .eq('prodcode', values.prodcode)
-      .maybeSingle();
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    try {
+      // Check if product already exists
+      const { data: existingProduct, error: checkError } = await supabase
+        .from('product')
+        .select('prodcode')
+        .eq('prodcode', values.prodcode)
+        .maybeSingle();
 
-    if (checkError) throw checkError;
-    if (existingProduct) {
-      throw new Error(`Product with code ${values.prodcode} already exists`);
+      if (checkError) throw checkError;
+      if (existingProduct) {
+        throw new Error(`Product with code ${values.prodcode} already exists`);
+      }
+
+      // Start transaction
+      const { error: productError } = await supabase
+        .from('product')
+        .insert({
+          prodcode: values.prodcode,
+          description: values.description,
+          unit: values.unit
+        });
+
+      if (productError) throw productError;
+
+      const { error: priceError } = await supabase
+        .from('pricehist')
+        .insert({
+          prodcode: values.prodcode,
+          unitprice: values.unitprice,
+          effdate: new Date().toISOString().split('T')[0]
+        });
+
+      if (priceError) {
+        // Rollback product insertion if price fails
+        await supabase
+          .from('product')
+          .delete()
+          .eq('prodcode', values.prodcode);
+        throw priceError;
+      }
+
+      toast({
+        title: "Product added successfully",
+        description: `${values.prodcode} has been added to your products.`
+      });
+
+      setIsAddProductOpen(false);
+      setTempProduct(null);
+      setIsPriceHistorySheetOpen(false);
+      setPriceHistory([]);
+
+      fetchProducts();
+    } catch (err: any) {
+      console.error('Error adding product:', err);
+      toast({
+        title: "Error adding product",
+        description: err.message || "Failed to add product. Please try again.",
+        variant: "destructive",
+      });
     }
-
-    // Proceed with insertion if product doesn't exist
-    const { error: productError } = await supabase
-      .from('product')
-      .insert({
-        prodcode: values.prodcode,
-        description: values.description,
-        unit: values.unit
-      });
-
-    if (productError) throw productError;
-
-    const { error: priceError } = await supabase
-      .from('pricehist')
-      .insert({
-        prodcode: values.prodcode,
-        unitprice: values.unitprice,
-        effdate: new Date().toISOString().split('T')[0]
-      });
-
-    if (priceError) throw priceError;
-
-    toast({
-      title: "Product added successfully",
-      description: `${values.prodcode} has been added to your products.`
-    });
-
-    setIsAddProductOpen(false);
-    setTempProduct(null);
-    setIsPriceHistorySheetOpen(false);
-    setPriceHistory([]);
-
-    fetchProducts();
-  } catch (err: any) {
-    console.error('Error adding product:', err);
-    toast({
-      title: "Error adding product",
-      description: err.message || "Failed to add product. Please try again.",
-      variant: "destructive",
-    });
-  }
-};
+  };
 
   const onEdit = async (values: z.infer<typeof formSchema>) => {
     if (!selectedProduct) return;
@@ -193,6 +200,7 @@ const Products = () => {
     if (!selectedProduct) return;
     
     try {
+      // First delete price history
       const { error: priceHistError } = await supabase
         .from('pricehist')
         .delete()
@@ -200,6 +208,7 @@ const Products = () => {
 
       if (priceHistError) throw priceHistError;
 
+      // Then delete product
       const { error: productError } = await supabase
         .from('product')
         .delete()
@@ -233,7 +242,7 @@ const Products = () => {
       const { data: productsData, error: productsError } = await supabase
         .from('product')
         .select('*')
-        .order('prodcode', { ascending: true }); // Ensure alphabetical order by product code
+        .order('prodcode', { ascending: true });
 
       if (productsError) throw productsError;
 
@@ -419,7 +428,7 @@ const Products = () => {
   // Effects
   useEffect(() => {
     fetchProducts();
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     setCurrentPage(1);
