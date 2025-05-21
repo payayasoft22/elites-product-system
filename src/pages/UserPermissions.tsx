@@ -7,38 +7,22 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
-
-interface UserPermissions {
-  addProduct: boolean;
-  editProduct: boolean;
-  deleteProduct: boolean;
-  addPriceHistory: boolean;
-  deletePriceHistory: boolean;
-  editPriceHistory: boolean;
-}
+import { PermissionActions, usePermission } from "@/hooks/usePermission";
 
 interface User {
   id: string;
   email: string;
   display_name?: string;
   role?: string;
-  permissions: UserPermissions;
+  permissions: Record<string, boolean>;
 }
-
-const defaultPermissions: UserPermissions = {
-  addProduct: false,
-  editProduct: false,
-  deleteProduct: false,
-  addPriceHistory: false,
-  deletePriceHistory: false,
-  editPriceHistory: false,
-};
 
 const UserPermissions = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
+  const { isAdmin, refreshPermissions } = usePermission();
 
   useEffect(() => {
     fetchUsers();
@@ -56,10 +40,7 @@ const UserPermissions = () => {
 
       const formattedUsers = (data || []).map(user => ({
         ...user,
-        permissions: {
-          ...defaultPermissions,
-          ...(user.permissions || {})
-        },
+        permissions: user.permissions || {},
       }));
 
       setUsers(formattedUsers);
@@ -75,7 +56,7 @@ const UserPermissions = () => {
     }
   };
 
-  const handlePermissionChange = async (userId: string, permissionType: keyof UserPermissions, newValue: boolean) => {
+  const handlePermissionChange = async (userId: string, permissionType: keyof typeof PermissionActions, newValue: boolean) => {
     try {
       // Find the user to update
       const userToUpdate = users.find(u => u.id === userId);
@@ -124,6 +105,9 @@ const UserPermissions = () => {
         title: 'Success',
         description: `Updated ${permissionType} permission`,
       });
+
+      // Refresh permissions in other components
+      refreshPermissions();
     } catch (error: any) {
       console.error('Update failed:', error);
       // Revert on error
@@ -204,23 +188,23 @@ const UserPermissions = () => {
                               <h4 className="font-medium">Products</h4>
                               <PermissionSwitch
                                 label="Add"
-                                checked={user.permissions.addProduct}
+                                checked={user.permissions[PermissionActions.ADD_PRODUCT] || false}
                                 onCheckedChange={(checked) => 
-                                  handlePermissionChange(user.id, 'addProduct', checked)
+                                  handlePermissionChange(user.id, 'ADD_PRODUCT', checked)
                                 }
                               />
                               <PermissionSwitch
                                 label="Edit"
-                                checked={user.permissions.editProduct}
+                                checked={user.permissions[PermissionActions.EDIT_PRODUCT] || false}
                                 onCheckedChange={(checked) => 
-                                  handlePermissionChange(user.id, 'editProduct', checked)
+                                  handlePermissionChange(user.id, 'EDIT_PRODUCT', checked)
                                 }
                               />
                               <PermissionSwitch
                                 label="Delete"
-                                checked={user.permissions.deleteProduct}
+                                checked={user.permissions[PermissionActions.DELETE_PRODUCT] || false}
                                 onCheckedChange={(checked) => 
-                                  handlePermissionChange(user.id, 'deleteProduct', checked)
+                                  handlePermissionChange(user.id, 'DELETE_PRODUCT', checked)
                                 }
                               />
                             </div>
@@ -228,23 +212,23 @@ const UserPermissions = () => {
                               <h4 className="font-medium">Price History</h4>
                               <PermissionSwitch
                                 label="Add"
-                                checked={user.permissions.addPriceHistory}
+                                checked={user.permissions[PermissionActions.ADD_PRICE_HISTORY] || false}
                                 onCheckedChange={(checked) => 
-                                  handlePermissionChange(user.id, 'addPriceHistory', checked)
+                                  handlePermissionChange(user.id, 'ADD_PRICE_HISTORY', checked)
                                 }
                               />
                               <PermissionSwitch
                                 label="Edit"
-                                checked={user.permissions.editPriceHistory}
+                                checked={user.permissions[PermissionActions.EDIT_PRICE_HISTORY] || false}
                                 onCheckedChange={(checked) => 
-                                  handlePermissionChange(user.id, 'editPriceHistory', checked)
+                                  handlePermissionChange(user.id, 'EDIT_PRICE_HISTORY', checked)
                                 }
                               />
                               <PermissionSwitch
                                 label="Delete"
-                                checked={user.permissions.deletePriceHistory}
+                                checked={user.permissions[PermissionActions.DELETE_PRICE_HISTORY] || false}
                                 onCheckedChange={(checked) => 
-                                  handlePermissionChange(user.id, 'deletePriceHistory', checked)
+                                  handlePermissionChange(user.id, 'DELETE_PRICE_HISTORY', checked)
                                 }
                               />
                             </div>
@@ -263,7 +247,6 @@ const UserPermissions = () => {
   );
 };
 
-// Reusable switch component
 const PermissionSwitch = ({
   label,
   checked,
