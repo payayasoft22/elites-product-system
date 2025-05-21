@@ -247,23 +247,27 @@ const UserPermissions = () => {
   );
 };
 
-const PermissionSwitch = ({
-  label,
-  checked,
-  onCheckedChange,
-}: {
+interface PermissionSwitchProps {
   label: string;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
-}) => (
-  <div className="flex items-center justify-between">
-    <span className="text-sm">{label}</span>
-    <Switch
-      checked={checked}
-      onCheckedChange={onCheckedChange}
-      className="data-[state=checked]:bg-green-500"
-    />
-  </div>
-);
+}
+
+const PermissionSwitch: React.FC<PermissionSwitchProps> = ({
+  label,
+  checked,
+  onCheckedChange,
+}) => {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-sm">{label}</span>
+      <Switch
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+        className="data-[state=checked]:bg-primary"
+      />
+    </div>
+  );
+};
 
 export default UserPermissions;
