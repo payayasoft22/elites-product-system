@@ -47,7 +47,6 @@ const PriceHistory = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedPrice, setSelectedPrice] = useState<PriceHistoryItem | null>(null);
   const [newPrice, setNewPrice] = useState<string>("");
-
   const [newDate, setNewDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
 
   const showPermissionDenied = () => {
@@ -158,7 +157,7 @@ const PriceHistory = () => {
         .order("effdate", { ascending: false });
 
       if (fetchError) throw fetchError;
-      setPriceHistory(updatedData || []); 
+      setPriceHistory(updatedData || []);
 
       setIsAddDialogOpen(false);
       setNewPrice("");
@@ -219,7 +218,7 @@ const PriceHistory = () => {
         .order("effdate", { ascending: false });
 
       if (fetchError) throw fetchError;
-      setPriceHistory(updatedData || []); 
+      setPriceHistory(updatedData || []);
 
       setIsEditDialogOpen(false);
       setSelectedPrice(null);
@@ -265,7 +264,7 @@ const PriceHistory = () => {
         .order("effdate", { ascending: false });
 
       if (fetchError) throw fetchError;
-      setPriceHistory(updatedData || []); 
+      setPriceHistory(updatedData || []);
 
       setIsDeleteDialogOpen(false);
       setSelectedPrice(null);
@@ -288,90 +287,113 @@ const PriceHistory = () => {
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Button variant="ghost" onClick={() => navigate("/products")}>
-              <ArrowLeft size={16} />
-              Back to Products
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" onClick={() => navigate("/products")} className="mr-2">
+              <ArrowLeft className="h-5 w-5" />
             </Button>
-            <CardTitle>{productDetails?.description || "Product not found"}</CardTitle>
+            <div>
+              <h2 className="text-3xl font-bold tracking-tight">Price History</h2>
+              <p className="text-muted-foreground">View historical pricing information for a product</p>
+            </div>
           </div>
           <Button
-            variant="primary"
-            onClick={() => setIsAddDialogOpen(true)}
+            onClick={() => {
+              if (!canAddPriceHistory) {
+                showPermissionDenied();
+                return;
+              }
+              setNewPrice("");
+              setNewDate(format(new Date(), "yyyy-MM-dd"));
+              setIsAddDialogOpen(true);
+            }}
             disabled={!canAddPriceHistory}
           >
-            <Plus size={16} />
-            Add Price
+            <Plus className="mr-2 h-4 w-4" /> Add Price History
           </Button>
         </div>
+
         {loading ? (
-          <div className="flex justify-center">
-            <Loader2 className="animate-spin" size={24} />
-          </div>
+          <Card className="flex items-center justify-center p-10">
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p>Loading price history...</p>
+            </div>
+          </Card>
+        ) : !productDetails ? (
+          <Card className="p-6 text-center">
+            <p>Product not found. Please go back and select a valid product.</p>
+            <Button onClick={() => navigate("/products")} className="mt-4">
+              Return to Products
+            </Button>
+          </Card>
         ) : (
           <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Price History</CardTitle>
-                <CardDescription>
-                  <span className="flex items-center space-x-2">
-                    <Calendar size={16} />
-                    <span>{productDetails?.unit}</span>
-                  </span>
-                </CardDescription>
-              </div>
+            <CardHeader className="pb-0">
+              <CardTitle>
+                {productDetails.prodcode}
+                {productDetails.description && ` - ${productDetails.description}`}
+              </CardTitle>
+              <CardDescription>Unit: {productDetails.unit || "N/A"}</CardDescription>
             </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Price</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {priceHistory.map((item, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{formatDate(item.effdate)}</TableCell>
-                      <TableCell>{formatPrice(item.unitprice)}</TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              if (canEditPriceHistory) {
-                                setSelectedPrice(item);
-                                setNewPrice(item.unitprice?.toString() || "");
-                                setIsEditDialogOpen(true);
-                              } else {
-                                showPermissionDenied();
-                              }
-                            }}
-                            disabled={!canEditPriceHistory}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              if (canDeletePriceHistory) {
-                                setSelectedPrice(item);
-                                setIsDeleteDialogOpen(true);
-                              } else {
-                                showPermissionDenied();
-                              }
-                            }}
-                            disabled={!canDeletePriceHistory}
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </TableCell>
+            <CardContent className="pt-4">
+              {priceHistory.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-center">
+                  <Calendar className="h-10 w-10 text-muted-foreground mb-3" />
+                  <h3 className="text-lg font-semibold">No price history available</h3>
+                  <p className="text-muted-foreground mt-1">This product doesn't have any recorded price changes yet.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Effective Date</TableHead>
+                      <TableHead>Price</TableHead>
+                      {(canEditPriceHistory || canDeletePriceHistory) && (
+                        <TableHead className="text-right">Actions</TableHead>
+                      )}
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {priceHistory.map((item, index) => (
+                      <TableRow key={index}>
+                        <TableCell>{formatDate(item.effdate)}</TableCell>
+                        <TableCell>{formatPrice(item.unitprice)}</TableCell>
+                        {(canEditPriceHistory || canDeletePriceHistory) && (
+                          <TableCell className="text-right">
+                            <div className="flex justify-end space-x-2">
+                              {canEditPriceHistory && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedPrice(item);
+                                    setNewPrice(item.unitprice?.toString() || "");
+                                    setIsEditDialogOpen(true);
+                                  }}
+                                >
+                                  Edit
+                                </Button>
+                              )}
+                              {canDeletePriceHistory && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedPrice(item);
+                                    setIsDeleteDialogOpen(true);
+                                  }}
+                                >
+                                  Delete
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         )}
@@ -382,33 +404,51 @@ const PriceHistory = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Price History</DialogTitle>
+            <DialogDescription>Add a new price history record for this product.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="newDate">Effective Date</Label>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="price" className="text-right">
+                Price
+              </Label>
+              <div className="col-span-3 flex items-center">
+                <DollarSign className="h-4 w-4 mr-1 text-muted-foreground" />
+                <Input
+                  id="price"
+                  value={newPrice}
+                  onChange={(e) => setNewPrice(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  disabled={!canAddPriceHistory}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="date" className="text-right">
+                Effective Date
+              </Label>
               <Input
-                id="newDate"
-                type="date"
+                id="date"
                 value={newDate}
                 onChange={(e) => setNewDate(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="newPrice">Price</Label>
-              <Input
-                id="newPrice"
-                type="number"
-                value={newPrice}
-                onChange={(e) => setNewPrice(e.target.value)}
-                placeholder="Enter new price"
+                className="col-span-3"
+                type="date"
+                disabled={!canAddPriceHistory}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="destructive" onClick={() => setIsAddDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleAddPrice}>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button 
+              type="submit" 
+              onClick={handleAddPrice}
+              disabled={!canAddPriceHistory}
+            >
               Add Price
             </Button>
           </DialogFooter>
@@ -419,54 +459,63 @@ const PriceHistory = () => {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Price History</DialogTitle>
+            <DialogTitle>Edit Price</DialogTitle>
+            <DialogDescription>Update the price for {formatDate(selectedPrice?.effdate || "")}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="newDate">Effective Date</Label>
-              <Input
-                id="newDate"
-                type="date"
-                value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="newPrice">Price</Label>
-              <Input
-                id="newPrice"
-                type="number"
-                value={newPrice}
-                onChange={(e) => setNewPrice(e.target.value)}
-                placeholder="Enter new price"
-              />
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-price" className="text-right">
+                Price
+              </Label>
+              <div className="col-span-3 flex items-center">
+                <DollarSign className="h-4 w-4 mr-1 text-muted-foreground" />
+                <Input
+                  id="edit-price"
+                  value={newPrice}
+                  onChange={(e) => setNewPrice(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  disabled={!canEditPriceHistory}
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="destructive" onClick={() => setIsEditDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleEditPrice}>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button 
+              type="submit" 
+              onClick={handleEditPrice}
+              disabled={!canEditPriceHistory}
+            >
               Update Price
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Price Dialog */}
+      {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Price History</DialogTitle>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the price history record from {formatDate(selectedPrice?.effdate || "")}? This action cannot be undone.
+            </DialogDescription>
           </DialogHeader>
-          <DialogDescription>
-            Are you sure you want to delete this price history record? This action cannot be undone.
-          </DialogDescription>
           <DialogFooter>
-            <Button variant="destructive" onClick={() => setIsDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="outline" onClick={handleDeletePrice}>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button 
+              variant="destructive" 
+              onClick={handleDeletePrice}
+              disabled={!canDeletePriceHistory}
+            >
               Delete
             </Button>
           </DialogFooter>
