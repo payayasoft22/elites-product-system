@@ -31,6 +31,12 @@ export const formSchema = z.object({
   unitprice: z.coerce.number().min(0.01, "Price must be greater than 0")
 });
 
+export const editFormSchema = z.object({
+  description: z.string().min(3, "Description must be at least 3 characters"),
+  unit: z.string().min(2, "Unit must be 2-3 characters").max(3, "Unit must be 2-3 characters"),
+  unitprice: z.coerce.number().min(0.01, "Price must be greater than 0")
+});
+
 interface Product {
   prodcode: string;
   description: string | null;
@@ -39,13 +45,14 @@ interface Product {
 }
 
 interface ProductFormProps {
-  onSubmit: (values: z.infer<typeof formSchema>) => Promise<void>;
+  onSubmit: (values: z.infer<typeof formSchema> | z.infer<typeof editFormSchema>) => Promise<void>;
   isEdit?: boolean;
   product?: Product | null;
   onCancel: () => void;
   onManagePriceHistory?: () => void;
   tempProduct?: Product | null;
   setTempProduct?: (product: Product | null) => void;
+  canAddPriceHistory?: boolean;
 }
 
 const ProductForm = ({
@@ -55,32 +62,34 @@ const ProductForm = ({
   onCancel,
   onManagePriceHistory,
   tempProduct,
-  setTempProduct
+  setTempProduct,
+  canAddPriceHistory = false
 }: ProductFormProps) => {
   const { toast } = useToast();
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+  const form = useForm<z.infer<typeof formSchema> | z.infer<typeof editFormSchema>>({
+    resolver: zodResolver(isEdit ? editFormSchema : formSchema),
     defaultValues: {
-      prodcode: product?.prodcode || "",
+      prodcode: isEdit ? "" : product?.prodcode || "",
       description: product?.description || "",
       unit: product?.unit || "",
       unitprice: product?.currentPrice || 0
     }
   });
 
-  const handleSubmit = async (values: z.infer<typeof formSchema>) => {
+  const handleSubmit = async (values: z.infer<typeof formSchema> | z.infer<typeof editFormSchema>) => {
     try {
-      // Additional validation in case the refine check didn't catch it
-      if (values.prodcode.length > 6) {
-        throw new Error("Product code cannot exceed 6 characters");
-      }
-
-      // Check for duplicates again right before submission
       if (!isEdit) {
+        // Additional validation for add form
+        const addValues = values as z.infer<typeof formSchema>;
+        if (addValues.prodcode.length > 6) {
+          throw new Error("Product code cannot exceed 6 characters");
+        }
+
+        // Check for duplicates again right before submission
         const { data: existingProduct } = await supabase
           .from('product')
           .select('prodcode')
-          .eq('prodcode', values.prodcode)
+          .eq('prodcode', addValues.prodcode)
           .maybeSingle();
 
         if (existingProduct) {
@@ -101,34 +110,35 @@ const ProductForm = ({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="prodcode"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Product Code</FormLabel>
-              <FormControl>
-                <Input 
-                  placeholder="Enter product code (6 chars max)" 
-                  {...field} 
-                  disabled={isEdit}
-                  maxLength={6}
-                  onChange={(e) => {
-                    const value = e.target.value.toUpperCase(); // Convert to uppercase
-                    field.onChange(value);
-                    if (setTempProduct && tempProduct) {
-                      setTempProduct({
-                        ...tempProduct,
-                        prodcode: value
-                      });
-                    }
-                  }}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {!isEdit && (
+          <FormField
+            control={form.control}
+            name="prodcode"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Product Code</FormLabel>
+                <FormControl>
+                  <Input 
+                    placeholder="Enter product code (6 chars max)" 
+                    {...field} 
+                    maxLength={6}
+                    onChange={(e) => {
+                      const value = e.target.value.toUpperCase();
+                      field.onChange(value);
+                      if (setTempProduct && tempProduct) {
+                        setTempProduct({
+                          ...tempProduct,
+                          prodcode: value
+                        });
+                      }
+                    }}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
         <FormField
           control={form.control}
           name="description"
@@ -166,7 +176,7 @@ const ProductForm = ({
                   {...field}
                   maxLength={3}
                   onChange={(e) => {
-                    const value = e.target.value.toUpperCase(); // Convert to uppercase
+                    const value = e.target.value.toUpperCase();
                     field.onChange(value);
                     if (setTempProduct && tempProduct) {
                       setTempProduct({
@@ -213,7 +223,7 @@ const ProductForm = ({
                     variant="outline" 
                     className="w-full flex items-center justify-center gap-2"
                     onClick={onManagePriceHistory}
-                    disabled={!tempProduct?.prodcode}
+                    disabled={!tempProduct?.prodcode || !canAddPriceHistory}
                   >
                     <Clock className="h-4 w-4" />
                     Manage Price History
